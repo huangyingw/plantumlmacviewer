@@ -1,3 +1,5 @@
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 import sys
 import tempfile
 from PyQt5.QtWidgets import (
@@ -13,6 +15,18 @@ from PyQt5.QtCore import Qt, QTemporaryFile
 import plantuml
 import subprocess
 import os
+
+
+class FileChangeHandler(FileSystemEventHandler):
+    def __init__(self, viewer, filePath):
+        super().__init__()
+        self.viewer = viewer
+        self.filePath = filePath
+
+    def on_modified(self, event):
+        # 当监控的文件被修改时，调用 viewer 的 loadAndDisplayUML 方法
+        if event.src_path == self.filePath:
+            self.viewer.loadAndDisplayUML(self.filePath)
 
 
 class UMLViewer(QMainWindow):
@@ -50,6 +64,16 @@ class UMLViewer(QMainWindow):
         )
         if filePath:
             self.loadAndDisplayUML(filePath)
+            self.startFileWatcher(filePath)
+
+    def startFileWatcher(self, filePath):
+        # 设置文件监控
+        self.event_handler = FileChangeHandler(self, filePath)
+        self.observer = Observer()
+        self.observer.schedule(
+            self.event_handler, os.path.dirname(filePath), recursive=False
+        )
+        self.observer.start()
 
     def loadAndDisplayUML(self, filePath):
         plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.12/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
