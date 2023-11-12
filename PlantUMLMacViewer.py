@@ -36,7 +36,6 @@ class UMLViewer(QMainWindow):
 
     def initUI(self):
         self.setWindowTitle("PlantUML Viewer")
-        self.setGeometry(100, 100, 800, 600)
 
         # 容纳UML图像的滚动区域
         self.scrollArea = QScrollArea(self)
@@ -51,6 +50,9 @@ class UMLViewer(QMainWindow):
 
         # 设置快捷键
         self.setupShortcuts()
+
+        # 窗口最大化
+        self.showMaximized()
 
     def setupShortcuts(self):
         # 使用 QShortcut 设置快捷键
