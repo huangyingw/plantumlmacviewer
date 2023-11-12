@@ -3,15 +3,13 @@ from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
     QLabel,
+    QShortcut,
     QScrollArea,
-    QVBoxLayout,
-    QWidget,
     QFileDialog,
 )
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt
 import plantuml
-
 
 class UMLViewer(QMainWindow):
     def __init__(self):
@@ -34,15 +32,9 @@ class UMLViewer(QMainWindow):
         self.setupShortcuts()
 
     def setupShortcuts(self):
-        # 设置快捷键以打开文件
-        self.openFileShortcut = QKeySequence("Ctrl+O")
-        self.addAction(self.openFileShortcut, self.openFile)
-
-    def addAction(self, shortcut, function):
-        # 创建动作并绑定快捷键
-        action = self.scrollArea.addAction(shortcut)
-        action.setShortcut(shortcut)
-        action.triggered.connect(function)
+        # 使用 QShortcut 设置快捷键
+        self.openFileShortcut = QShortcut(QKeySequence("Ctrl+O"), self)
+        self.openFileShortcut.activated.connect(self.openFile)
 
     def openFile(self):
         # 使用文件对话框打开文件
@@ -53,14 +45,21 @@ class UMLViewer(QMainWindow):
             self.loadAndDisplayUML(filePath)
 
     def loadAndDisplayUML(self, filePath):
-        # 渲染PlantUML图表
-        uml_image = plantuml.PlantUML(
-            url="http://www.plantuml.com/plantuml/img/"
-        )
-        img = uml_image.processes_file(filePath)
-        image = QImage.fromData(img)
-        pixmap = QPixmap.fromImage(image)
-        self.imageLabel.setPixmap(pixmap)
+        # 创建 PlantUML 实例
+        uml_image = plantuml.PlantUML(url="http://www.plantuml.com/plantuml/img/")
+
+        # 处理文件并获取图像数据
+        img_data = uml_image.processes_file(filePath)
+
+        # 检查返回的数据是否为字节类型
+        if isinstance(img_data, bytes):
+            # 如果是字节数据，转换为 QImage
+            image = QImage.fromData(img_data)
+            pixmap = QPixmap.fromImage(image)
+            self.imageLabel.setPixmap(pixmap)
+        else:
+            # 如果不是字节数据，打印错误信息或进行错误处理
+            print("Failed to load or process the PlantUML file.")
 
     def keyPressEvent(self, event):
         # 处理快捷键事件
@@ -72,7 +71,6 @@ class UMLViewer(QMainWindow):
             pass
         else:
             super().keyPressEvent(event)
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
