@@ -12,6 +12,7 @@ from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QTemporaryFile
 import plantuml
 import subprocess
+import os
 
 
 class UMLViewer(QMainWindow):
@@ -29,7 +30,10 @@ class UMLViewer(QMainWindow):
 
         # UML图像标签
         self.imageLabel = QLabel()
+        self.imageLabel.setAlignment(Qt.AlignCenter)  # 居中对齐
+        self.imageLabel.setScaledContents(True)  # 允许图像根据标签大小缩放
         self.scrollArea.setWidget(self.imageLabel)
+        self.scrollArea.setWidgetResizable(True)  # 允许滚动区域适应内容大小
 
         # 设置快捷键
         self.setupShortcuts()
@@ -50,31 +54,25 @@ class UMLViewer(QMainWindow):
     def loadAndDisplayUML(self, filePath):
         plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.12/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
 
-        # 使用 tempfile 创建临时文件
-        with tempfile.NamedTemporaryFile(
-            suffix=".png", delete=False
-        ) as temp_file:
-            temp_file_path = temp_file.name
+        # 获取 PNG 文件的输出路径
+        output_png_path = filePath.replace(".puml", ".png")
+        print(f"Expected PNG file at: {output_png_path}")
 
-            # 调用 PlantUML Java 工具生成图像
-            subprocess.run(
-                [
-                    "java",
-                    "-jar",
-                    plantuml_jar_path,
-                    "-tpng",
-                    filePath,
-                    "-o",
-                    temp_file_path,
-                ]
-            )
+        # 构造 PlantUML 命令
+        command = ["java", "-jar", plantuml_jar_path, "-tpng", filePath]
+        print(f"Running command: {' '.join(command)}")
 
-            # 加载临时文件中的图像
-            pixmap = QPixmap(temp_file_path)
-            if not pixmap.isNull():
-                self.imageLabel.setPixmap(pixmap)
-            else:
-                print("Failed to generate or load the PlantUML image.")
+        # 执行命令
+        subprocess.run(command)
+
+        # 加载生成的 PNG 文件
+        print(f"Loading PNG file: {output_png_path}")
+        pixmap = QPixmap(output_png_path)
+        if not pixmap.isNull():
+            print("PNG file loaded successfully, updating the label.")
+            self.imageLabel.setPixmap(pixmap)
+        else:
+            print("Failed to generate or load the PlantUML image.")
 
     def keyPressEvent(self, event):
         # 处理快捷键事件
