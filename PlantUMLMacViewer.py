@@ -94,6 +94,8 @@ class UMLViewer(QMainWindow):
         self.observer.start()
 
     def loadAndDisplayUML(self, filePath):
+        # 在加载 UML 之前，设置窗口标题为文件名
+        self.setWindowTitle(os.path.basename(filePath))
         plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.12/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
 
         # 获取 PNG 文件的输出路径
