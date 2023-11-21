@@ -29,9 +29,25 @@ class FileChangeHandler(FileSystemEventHandler):
             self.viewer.loadAndDisplayUML(self.filePath)
 
 
+class CentralApp(QApplication):
+    def __init__(self, argv):
+        super().__init__(argv)
+        self.windows = []
+
+    def openNewWindow(self, filePath=None):
+        # 创建新窗口并将其添加到窗口列表中
+        new_window = UMLViewer(self)
+        self.windows.append(new_window)
+        new_window.show()
+        if filePath:
+            new_window.loadAndDisplayUML(filePath)
+            new_window.startFileWatcher(filePath)
+
+
 class UMLViewer(QMainWindow):
-    def __init__(self):
+    def __init__(self, centralApp):
         super().__init__()
+        self.centralApp = centralApp
         self.initUI()
 
     def initUI(self):
@@ -60,12 +76,12 @@ class UMLViewer(QMainWindow):
         self.openFileShortcut.activated.connect(self.openFile)
 
     def openFile(self):
-        # 使用文件对话框打开文件
+        # 修改 openFile 方法以支持在新窗口中打开文件
         filePath, _ = QFileDialog.getOpenFileName(
             self, "Open file", "", "PlantUML files (*.puml)"
         )
         if filePath:
-            self.loadAndDisplayUML(filePath)
+            self.centralApp.openNewWindow(filePath)
             self.startFileWatcher(filePath)
 
     def startFileWatcher(self, filePath):
@@ -113,7 +129,6 @@ class UMLViewer(QMainWindow):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    viewer = UMLViewer()
-    viewer.show()
+    app = CentralApp(sys.argv)
+    app.openNewWindow()  # 打开初始窗口
     sys.exit(app.exec_())
