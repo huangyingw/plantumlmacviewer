@@ -33,6 +33,7 @@ class CentralApp(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
         self.windows = []
+        self.observers = {}  # 目录到 Observer 的映射
 
     def openNewWindow(self, filePath=None):
         # 创建新窗口并将其添加到窗口列表中
@@ -41,7 +42,23 @@ class CentralApp(QApplication):
         new_window.show()
         if filePath:
             new_window.loadAndDisplayUML(filePath)
-            new_window.startFileWatcher(filePath)
+            self.startFileWatcher(filePath, new_window)
+
+    def startFileWatcher(self, filePath, viewer):
+        # 获取目录路径
+        directory = os.path.dirname(filePath)
+
+        # 如果该目录没有被监控，创建新的 Observer
+        if directory not in self.observers:
+            observer = Observer()
+            self.observers[directory] = observer
+            observer.start()
+
+        # 为该窗口添加事件处理器
+        event_handler = FileChangeHandler(viewer, filePath)
+        self.observers[directory].schedule(
+            event_handler, directory, recursive=False
+        )
 
 
 class UMLViewer(QMainWindow):
@@ -98,25 +115,39 @@ class UMLViewer(QMainWindow):
         self.setWindowTitle(os.path.basename(filePath))
         plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.12/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
 
-        # 获取 PNG 文件的输出路径
-        output_png_path = filePath.replace(".puml", ".png")
-        print(f"Expected PNG file at: {output_png_path}")
+        # 使用临时文件来保存生成的 PNG
+        temp_dir = tempfile.mkdtemp()  # 创建临时目录
+        temp_png_path = os.path.join(
+            temp_dir, os.path.basename(filePath).replace(".puml", ".png")
+        )
 
-        # 构造 PlantUML 命令
-        command = ["java", "-jar", plantuml_jar_path, "-tpng", filePath]
+        # 更新 PlantUML 命令以使用临时目录
+        command = [
+            "java",
+            "-jar",
+            plantuml_jar_path,
+            "-tpng",
+            "-o",
+            temp_dir,
+            filePath,
+        ]
         print(f"Running command: {' '.join(command)}")
 
         # 执行命令
         subprocess.run(command)
 
-        # 加载生成的 PNG 文件
-        print(f"Loading PNG file: {output_png_path}")
-        pixmap = QPixmap(output_png_path)
+        print(f"Loading PNG file: {temp_png_path}")
+        self.imageLabel.clear()  # 清空现有图像
+        pixmap = QPixmap(temp_png_path)
         if not pixmap.isNull():
             print("PNG file loaded successfully, updating the label.")
             self.imageLabel.setPixmap(pixmap)
         else:
             print("Failed to generate or load the PlantUML image.")
+
+            # 清理临时文件
+            os.unlink(temp_png_path)
+            os.rmdir(temp_dir)
 
     def keyPressEvent(self, event):
         # 处理快捷键事件
