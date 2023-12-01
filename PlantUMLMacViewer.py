@@ -111,6 +111,7 @@ class UMLViewer(QMainWindow):
         self.observer.start()
 
     def loadAndDisplayUML(self, filePath):
+        self.setFocusPolicy(Qt.NoFocus)
         # 在加载 UML 之前，设置窗口标题为文件名
         self.setWindowTitle(os.path.basename(filePath))
         plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.12/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
@@ -138,12 +139,13 @@ class UMLViewer(QMainWindow):
 
         print(f"Loading PNG file: {temp_png_path}")
         self.imageLabel.clear()  # 清空现有图像
-        pixmap = QPixmap(temp_png_path)
-        if not pixmap.isNull():
-            print("PNG file loaded successfully, updating the label.")
+        image = QImage(temp_png_path)
+        if not image.isNull():
+            pixmap = QPixmap.fromImage(image)
             self.imageLabel.setPixmap(pixmap)
+            print("Image updated successfully.")
         else:
-            print("Failed to generate or load the PlantUML image.")
+            print("Failed to load the image.")
 
             # 清理临时文件
             os.unlink(temp_png_path)
