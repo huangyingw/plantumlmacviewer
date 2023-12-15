@@ -32,17 +32,24 @@ class FileChangeHandler(FileSystemEventHandler):
 class CentralApp(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
-        self.windows = []
+        self.windows = []  # 存储所有打开的窗口
+        self.fileWindowMap = {}  # 文件路径到窗口的映射
         self.observers = {}  # 目录到 Observer 的映射
 
     def openNewWindow(self, filePath=None):
-        # 创建新窗口并将其添加到窗口列表中
+        # 如果文件已经打开，激活对应的窗口
+        if filePath in self.fileWindowMap:
+            self.fileWindowMap[filePath].activateWindow()
+            return
+
+        # 创建新窗口并将其添加到窗口列表和文件映射中
         new_window = UMLViewer(self)
         self.windows.append(new_window)
-        new_window.show()
         if filePath:
+            self.fileWindowMap[filePath] = new_window
             new_window.loadAndDisplayUML(filePath)
             self.startFileWatcher(filePath, new_window)
+        new_window.show()
 
     def startFileWatcher(self, filePath, viewer):
         # 获取目录路径
