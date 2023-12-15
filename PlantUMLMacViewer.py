@@ -4,11 +4,12 @@ import sys
 import tempfile
 from PyQt5.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QLabel,
-    QShortcut,
-    QScrollArea,
     QFileDialog,
+    QLabel,
+    QMainWindow,
+    QScrollArea,
+    QShortcut,
+    QSizePolicy,
 )
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QTemporaryFile
@@ -84,6 +85,9 @@ class UMLViewer(QMainWindow):
         # UML图像标签
         self.imageLabel = QLabel()
         self.imageLabel.setAlignment(Qt.AlignCenter)  # 居中对齐
+
+        # 设置图像的尺寸策略，使其能够根据可用空间自动调整大小
+        self.imageLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         self.imageLabel.setScaledContents(True)  # 允许图像根据标签大小缩放
         self.scrollArea.setWidget(self.imageLabel)
         self.scrollArea.setWidgetResizable(True)  # 允许滚动区域适应内容大小
