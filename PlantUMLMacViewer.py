@@ -125,7 +125,7 @@ class UMLViewer(QMainWindow):
         self.setFocusPolicy(Qt.NoFocus)
         # 在加载 UML 之前，设置窗口标题为文件名
         self.setWindowTitle(os.path.basename(filePath))
-        plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.12/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
+        plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
 
         # 使用临时文件来保存生成的 PNG
         temp_dir = tempfile.mkdtemp()  # 创建临时目录
