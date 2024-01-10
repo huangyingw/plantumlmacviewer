@@ -151,7 +151,16 @@ class UMLViewer(QMainWindow):
         print(f"Running command: {' '.join(command)}")
 
         # 执行命令
-        subprocess.run(command)
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error: {e}")
+            # 在这里可以添加更多的用户通知逻辑，如弹出对话框
+            return
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            # 同样可以添加用户通知逻辑
+            return
 
         print(f"Loading PNG file: {temp_png_path}")
         self.imageLabel.clear()  # 清空现有图像
