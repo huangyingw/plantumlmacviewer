@@ -38,9 +38,17 @@ class CentralApp(QApplication):
         self.observers = {}  # 目录到 Observer 的映射
 
     def openNewWindow(self, filePath=None):
+        # 确保路径是规范化的
+        if filePath:
+            filePath = os.path.abspath(filePath)
+
         # 如果文件已经打开，激活对应的窗口
         if filePath in self.fileWindowMap:
-            self.fileWindowMap[filePath].activateWindow()
+            window = self.fileWindowMap[filePath]
+            print(f"Activating existing window for {filePath}")
+            window.raise_()
+            window.activateWindow()
+            QApplication.processEvents()  # 处理事件队列
             return
 
         # 创建新窗口并将其添加到窗口列表和文件映射中
@@ -53,20 +61,25 @@ class CentralApp(QApplication):
         new_window.show()
 
     def startFileWatcher(self, filePath, viewer):
+        # 确保路径是规范化的
+        filePath = os.path.abspath(filePath)
         # 获取目录路径
         directory = os.path.dirname(filePath)
 
-        # 如果该目录没有被监控，创建新的 Observer
-        if directory not in self.observers:
+        # 检查此目录是否已经有一个监控器，如果有，只需添加事件处理器，而不是创建新的监控器
+        if directory in self.observers:
+            # 为已存在的监控器添加事件处理器
+            event_handler = FileChangeHandler(viewer, filePath)
+            self.observers[directory].schedule(
+                event_handler, directory, recursive=False
+            )
+        else:
+            # 创建新的 Observer
             observer = Observer()
             self.observers[directory] = observer
+            event_handler = FileChangeHandler(viewer, filePath)
+            observer.schedule(event_handler, directory, recursive=False)
             observer.start()
-
-        # 为该窗口添加事件处理器
-        event_handler = FileChangeHandler(viewer, filePath)
-        self.observers[directory].schedule(
-            event_handler, directory, recursive=False
-        )
 
 
 class UMLViewer(QMainWindow):
@@ -109,17 +122,9 @@ class UMLViewer(QMainWindow):
             self, "Open file", "", "PlantUML files (*.puml)"
         )
         if filePath:
+            # 确保路径是规范化的
+            filePath = os.path.abspath(filePath)
             self.centralApp.openNewWindow(filePath)
-            self.startFileWatcher(filePath)
-
-    def startFileWatcher(self, filePath):
-        # 设置文件监控
-        self.event_handler = FileChangeHandler(self, filePath)
-        self.observer = Observer()
-        self.observer.schedule(
-            self.event_handler, os.path.dirname(filePath), recursive=False
-        )
-        self.observer.start()
 
     def loadAndDisplayUML(self, filePath):
         self.setFocusPolicy(Qt.NoFocus)
