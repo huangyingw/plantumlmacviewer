@@ -152,7 +152,8 @@ class UMLViewer(QMainWindow):
 
         # 执行命令
         try:
-            subprocess.run(command, check=True)
+            result = subprocess.run(command, check=True, capture_output=True)
+            print(f"PlantUML Output: {result.stdout}")
         except subprocess.CalledProcessError as e:
             print(f"Error: {e}")
             # 在这里可以添加更多的用户通知逻辑，如弹出对话框
