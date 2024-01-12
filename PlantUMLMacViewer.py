@@ -116,6 +116,10 @@ class CentralApp(QApplication):
             self.startFileWatcher(filePath, new_window)
         new_window.show()
 
+        # 新增代码：激活并将新窗口置于前台
+        new_window.raise_()
+        new_window.activateWindow()
+
     def startFileWatcher(self, filePath, viewer):
         # 确保路径是规范化的
         filePath = os.path.abspath(filePath)
