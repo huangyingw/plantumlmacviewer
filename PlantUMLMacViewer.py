@@ -1,4 +1,5 @@
 from watchdog.observers import Observer
+from PyQt5.QtCore import pyqtSignal
 from watchdog.events import FileSystemEventHandler
 import sys
 import tempfile
@@ -16,6 +17,9 @@ from PyQt5.QtCore import Qt, QTemporaryFile
 import plantuml
 import subprocess
 import os
+import fcntl
+import time
+import threading
 
 
 class FileChangeHandler(FileSystemEventHandler):
@@ -31,15 +35,64 @@ class FileChangeHandler(FileSystemEventHandler):
 
 
 class CentralApp(QApplication):
+    # 定义一个信号，用于从后台线程向主线程发送文件路径
+    openWindowSignal = pyqtSignal(str)
+
+    def listenToNamedPipe(self, pipeName):
+        print("开始监听管道")
+        if not os.path.exists(pipeName):
+            os.mkfifo(pipeName)
+            print(f"创建管道: {pipeName}")
+
+        # 打开管道用于非阻塞读取
+        pipe_fd = os.open(pipeName, os.O_RDONLY | os.O_NONBLOCK)
+        fcntl.fcntl(pipe_fd, fcntl.F_SETFL, os.O_NONBLOCK)  # 确认非阻塞模式
+        print("管道设置为非阻塞模式")
+
+        while True:
+            try:
+                # 直接从文件描述符读取数据
+                data = os.read(pipe_fd, 1024)
+                if data:
+                    filePath = data.decode().strip()
+                    print(f"读取到的文件路径: {filePath}")
+                    if filePath not in self.readPaths:
+                        self.readPaths.add(filePath)
+                        self.openWindowSignal.emit(filePath)
+                    else:
+                        print(f"Duplicate path detected: {filePath}")
+                else:
+                    print("管道中没有新数据")
+            except BlockingIOError:
+                # 非阻塞模式下读取时可能遇到的正常异常
+                print("非阻塞模式下读取无数据")
+            except Exception as e:
+                print(f"读取管道时发生异常: {e}")
+
+            # 添加一些小延时以减少CPU占用
+            time.sleep(0.1)
+
     def __init__(self, argv):
         super().__init__(argv)
         self.windows = []  # 存储所有打开的窗口
         self.fileWindowMap = {}  # 文件路径到窗口的映射
         self.observers = {}  # 目录到 Observer 的映射
+        self.readPaths = set()  # 用于存储已读取的文件路径
+
+        # 连接信号到槽函数
+        self.openWindowSignal.connect(self.openNewWindow)
+
+        # 启动监听线程
+        pipeThread = threading.Thread(
+            target=self.listenToNamedPipe, args=("/tmp/umlviewer_pipe",)
+        )
+        pipeThread.daemon = True
+        pipeThread.start()
 
     def openNewWindow(self, filePath=None):
         # 确保路径是规范化的
         if filePath:
+            print(f"尝试打开新窗口: {filePath}")
             filePath = os.path.abspath(filePath)
 
         # 如果文件已经打开，激活对应的窗口
@@ -152,9 +205,10 @@ class UMLViewer(QMainWindow):
 
         # 执行命令
         try:
-            subprocess.run(command, check=True)
+            result = subprocess.run(command, check=True, capture_output=True)
+            print(f"PlantUML Output: {result.stdout}")
         except subprocess.CalledProcessError as e:
-            print(f"Error: {e}")
+            print(f"Error: {e}\nOutput: {e.output}")
             # 在这里可以添加更多的用户通知逻辑，如弹出对话框
             return
         except Exception as e:
