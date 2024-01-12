@@ -13,9 +13,11 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, QTemporaryFile
-import plantuml
+from PyQt5.QtCore import QEvent, QCoreApplication, QTimer
 import subprocess
 import os
+import socket
+import threading
 
 
 class FileChangeHandler(FileSystemEventHandler):
@@ -30,12 +32,60 @@ class FileChangeHandler(FileSystemEventHandler):
             self.viewer.loadAndDisplayUML(self.filePath)
 
 
+class OpenWindowEvent(QEvent):
+    EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
+
+    def __init__(self, filePath):
+        super().__init__(OpenWindowEvent.EVENT_TYPE)
+        self.filePath = filePath
+
+
 class CentralApp(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
         self.windows = []  # 存储所有打开的窗口
         self.fileWindowMap = {}  # 文件路径到窗口的映射
         self.observers = {}  # 目录到 Observer 的映射
+
+        # 启动套接字监听线程
+        socketThread = threading.Thread(target=self.listenToSocket)
+        socketThread.daemon = True
+        socketThread.start()
+
+    def listenToSocket(self):
+        host = "localhost"  # 或者其他适合您需求的主机地址
+        port = 12345  # 选择一个适合的端口号
+
+        # 创建套接字
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind((host, port))
+            s.listen()
+
+            print(f"Listening on {host}:{port}")
+
+            while True:
+                # 等待连接
+                conn, addr = s.accept()
+                with conn:
+                    print(f"Connected by {addr}")
+
+                    # 接收数据
+                    while True:
+                        data = conn.recv(1024)
+                        if not data:
+                            break
+
+                        file_path = data.decode().strip()
+                        print(f"Received file path: {file_path}")
+
+                        # 检查路径是否已经打开
+                        if file_path not in self.fileWindowMap:
+                            # 使用 QCoreApplication.postEvent 发送事件
+                            QCoreApplication.postEvent(self, OpenWindowEvent(file_path))
+
+    def customEvent(self, event):
+        if event.type() == OpenWindowEvent.EVENT_TYPE:
+            self.openNewWindow(event.filePath)
 
     def openNewWindow(self, filePath=None):
         # 确保路径是规范化的
