@@ -78,14 +78,20 @@ class CentralApp(QApplication):
                         file_path = data.decode().strip()
                         print(f"Received file path: {file_path}")
 
-                        # 检查路径是否已经打开
-                        if file_path not in self.fileWindowMap:
-                            # 使用 QCoreApplication.postEvent 发送事件
-                            QCoreApplication.postEvent(self, OpenWindowEvent(file_path))
+                        # 总是发送 OpenWindowEvent
+                        QCoreApplication.postEvent(
+                            self, OpenWindowEvent(file_path)
+                        )
 
     def customEvent(self, event):
         if event.type() == OpenWindowEvent.EVENT_TYPE:
-            self.openNewWindow(event.filePath)
+            filePath = event.filePath
+            if filePath in self.fileWindowMap:
+                window = self.fileWindowMap[filePath]
+                window.raise_()
+                window.activateWindow()
+            else:
+                self.openNewWindow(filePath)
 
     def openNewWindow(self, filePath=None):
         # 确保路径是规范化的
