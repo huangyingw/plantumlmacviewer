@@ -1,0 +1,8 @@
+[deploy]
+	host = localhost
+	path = ~/Dropbox/myproject/git/system_design/plantumlmacviewer
+[remote "origin"]
+	url = git@github.com:huangyingw/plantumlmacviewer.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[push]
+    remote = origin
