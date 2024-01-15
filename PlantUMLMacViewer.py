@@ -1,4 +1,5 @@
 from watchdog.observers import Observer
+import AppKit
 from watchdog.events import FileSystemEventHandler
 import sys
 import tempfile
@@ -187,6 +188,8 @@ class UMLViewer(QMainWindow):
             self.centralApp.openNewWindow(filePath)
 
     def loadAndDisplayUML(self, filePath):
+        # 在更新前捕获当前活动的应用程序
+        self.previousApp = self.getActiveAppName()
         self.setFocusPolicy(Qt.NoFocus)
         # 在加载 UML 之前，设置窗口标题为文件名
         self.setWindowTitle(os.path.basename(filePath))
@@ -230,12 +233,34 @@ class UMLViewer(QMainWindow):
             pixmap = QPixmap.fromImage(image)
             self.imageLabel.setPixmap(pixmap)
             print("Image updated successfully.")
+
+            # 新增代码：激活并将窗口置于前台
+            self.raise_()
+            self.activateWindow()
         else:
             print("Failed to load the image.")
 
             # 清理临时文件
             os.unlink(temp_png_path)
             os.rmdir(temp_dir)
+        # 更新图像后将焦点返回给之前的应用程序
+        self.setFocusToApp(self.previousApp)
+
+    def getActiveAppName(self):
+        # 获取当前活动的应用程序的名称
+        ws = AppKit.NSWorkspace.sharedWorkspace()
+        frontmostApp = ws.frontmostApplication()
+        return frontmostApp.localizedName()
+
+    def setFocusToApp(self, appName):
+        # 将焦点设置到指定的应用程序
+        ws = AppKit.NSWorkspace.sharedWorkspace()
+        for app in ws.runningApplications():
+            if app.localizedName() == appName:
+                app.activateWithOptions_(
+                    AppKit.NSApplicationActivateIgnoringOtherApps
+                )
+                break
 
     def keyPressEvent(self, event):
         # 处理快捷键事件
