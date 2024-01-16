@@ -4,7 +4,7 @@
 "./PlantUMLViewer.go"
 "./go.mod"
 "./includefile.conf"
-"./listenToSocket.gdio.diff"
 "./prunefile.conf"
 "./prunefix.conf"
 "./rsync.files"
+"./setFocusToApp.gdio.diff"
