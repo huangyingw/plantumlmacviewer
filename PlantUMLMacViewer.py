@@ -1,4 +1,5 @@
 from watchdog.observers import Observer
+from PyQt5.QtCore import pyqtSignal
 import AppKit
 from watchdog.events import FileSystemEventHandler
 import sys
@@ -144,10 +145,13 @@ class CentralApp(QApplication):
 
 
 class UMLViewer(QMainWindow):
+    focusSignal = pyqtSignal()
+
     def __init__(self, centralApp):
         super().__init__()
         self.centralApp = centralApp
         self.initUI()
+        self.focusSignal.connect(self.postFocusProcessing)
 
     def initUI(self):
         self.setWindowTitle("PlantUML Viewer")
@@ -188,62 +192,63 @@ class UMLViewer(QMainWindow):
             self.centralApp.openNewWindow(filePath)
 
     def loadAndDisplayUML(self, filePath):
-        # 在更新前捕获当前活动的应用程序
-        self.previousApp = self.getActiveAppName()
-        self.setFocusPolicy(Qt.NoFocus)
-        # 在加载 UML 之前，设置窗口标题为文件名
-        self.setWindowTitle(os.path.basename(filePath))
-        plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
-
-        # 使用临时文件来保存生成的 PNG
-        temp_dir = tempfile.mkdtemp()  # 创建临时目录
-        temp_png_path = os.path.join(
-            temp_dir, os.path.basename(filePath).replace(".puml", ".png")
-        )
-
-        # 更新 PlantUML 命令以使用临时目录
-        command = [
-            "java",
-            "-jar",
-            plantuml_jar_path,
-            "-tpng",
-            "-o",
-            temp_dir,
-            filePath,
-        ]
-        print(f"Running command: {' '.join(command)}")
-
-        # 执行命令
         try:
+            self.previousApp = self.getActiveAppName()
+            self.setFocusPolicy(Qt.NoFocus)
+            # 在加载 UML 之前，设置窗口标题为文件名
+            self.setWindowTitle(os.path.basename(filePath))
+            plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
+
+            # 使用临时文件来保存生成的 PNG
+            temp_dir = tempfile.mkdtemp()  # 创建临时目录
+            temp_png_path = os.path.join(
+                temp_dir, os.path.basename(filePath).replace(".puml", ".png")
+            )
+
+            # 更新 PlantUML 命令以使用临时目录
+            command = [
+                "java",
+                "-jar",
+                plantuml_jar_path,
+                "-tpng",
+                "-o",
+                temp_dir,
+                filePath,
+            ]
+            print(f"Running command: {' '.join(command)}")
             result = subprocess.run(command, check=True, capture_output=True)
             print(f"PlantUML Output: {result.stdout}")
+
+            print(f"Loading PNG file: {temp_png_path}")
+            self.imageLabel.clear()  # 清空现有图像
+            image = QImage(temp_png_path)
+            if not image.isNull():
+                pixmap = QPixmap.fromImage(image)
+                self.imageLabel.setPixmap(pixmap)
+                print("Image updated successfully.")
+            else:
+                raise Exception("Failed to load the generated image.")
+
         except subprocess.CalledProcessError as e:
-            print(f"Error: {e}")
-            # 在这里可以添加更多的用户通知逻辑，如弹出对话框
-            return
+            error_message = f"PlantUML Error: {e.stderr.decode()}"
+            self.imageLabel.setText(error_message)
+            print(error_message)
+
         except Exception as e:
+            self.imageLabel.setText(str(e))
             print(f"Unexpected error: {e}")
-            # 同样可以添加用户通知逻辑
-            return
 
-        print(f"Loading PNG file: {temp_png_path}")
-        self.imageLabel.clear()  # 清空现有图像
-        image = QImage(temp_png_path)
-        if not image.isNull():
-            pixmap = QPixmap.fromImage(image)
-            self.imageLabel.setPixmap(pixmap)
-            print("Image updated successfully.")
+        finally:
+            if os.path.exists(temp_png_path):
+                os.unlink(temp_png_path)
+            if os.path.exists(temp_dir):
+                os.rmdir(temp_dir)
+            self.focusSignal.emit()  # 发射信号
 
-            # 新增代码：激活并将窗口置于前台
-            self.raise_()
-            self.activateWindow()
-        else:
-            print("Failed to load the image.")
-
-            # 清理临时文件
-            os.unlink(temp_png_path)
-            os.rmdir(temp_dir)
-        # 更新图像后将焦点返回给之前的应用程序
+    def postFocusProcessing(self):
+        self.raise_()
+        self.activateWindow()
+        QApplication.processEvents()
         self.setFocusToApp(self.previousApp)
 
     def getActiveAppName(self):
