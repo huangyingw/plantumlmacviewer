@@ -192,6 +192,8 @@ class UMLViewer(QMainWindow):
             self.centralApp.openNewWindow(filePath)
 
     def loadAndDisplayUML(self, filePath):
+        temp_png_path = None
+        temp_dir = None
         try:
             self.previousApp = self.getActiveAppName()
             self.setFocusPolicy(Qt.NoFocus)
@@ -219,31 +221,43 @@ class UMLViewer(QMainWindow):
             result = subprocess.run(command, check=True, capture_output=True)
             print(f"PlantUML Output: {result.stdout}")
 
-            print(f"Loading PNG file: {temp_png_path}")
-            self.imageLabel.clear()  # 清空现有图像
-            image = QImage(temp_png_path)
-            if not image.isNull():
-                pixmap = QPixmap.fromImage(image)
-                self.imageLabel.setPixmap(pixmap)
-                print("Image updated successfully.")
-            else:
-                raise Exception("Failed to load the generated image.")
-
         except subprocess.CalledProcessError as e:
-            error_message = f"PlantUML Error: {e.stderr.decode()}"
-            self.imageLabel.setText(error_message)
-            print(error_message)
+            print(f"Error during subprocess execution: {e}")
+            self.imageLabel.setText("Error generating UML diagram.")
+            return
 
-        except Exception as e:
-            self.imageLabel.setText(str(e))
-            print(f"Unexpected error: {e}")
+        # 统一的图像加载和显示逻辑
+        self.displayImage(temp_png_path)
 
         finally:
-            if os.path.exists(temp_png_path):
-                os.unlink(temp_png_path)
-            if os.path.exists(temp_dir):
-                os.rmdir(temp_dir)
-            self.focusSignal.emit()  # 发射信号
+            # 删除临时 PNG 文件
+            if temp_png_path and os.path.exists(temp_png_path):
+                try:
+                    os.unlink(temp_png_path)
+                except Exception as e:
+                    print(f"Error removing temp file: {e}")
+
+            # 删除临时目录
+            if temp_dir and os.path.exists(temp_dir):
+                try:
+                    os.rmdir(temp_dir)
+                except Exception as e:
+                    print(f"Error removing temp dir: {e}")
+
+            # 发射信号
+            self.focusSignal.emit()
+
+    def displayImage(self, imagePath):
+        print(f"Loading PNG file: {imagePath}")
+        self.imageLabel.clear()  # 清空现有图像
+        image = QImage(imagePath)
+        if not image.isNull():
+            pixmap = QPixmap.fromImage(image)
+            self.imageLabel.setPixmap(pixmap)
+            print("Image updated successfully.")
+        else:
+            self.imageLabel.setText("Failed to load the generated image.")
+            print("Failed to load the generated image.")
 
     def postFocusProcessing(self):
         self.raise_()
