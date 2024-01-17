@@ -194,6 +194,8 @@ class UMLViewer(QMainWindow):
     def loadAndDisplayUML(self, filePath):
         temp_png_path = None
         temp_dir = None
+        error_occurred = False
+
         try:
             self.previousApp = self.getActiveAppName()
             self.setFocusPolicy(Qt.NoFocus)
@@ -221,16 +223,18 @@ class UMLViewer(QMainWindow):
             result = subprocess.run(command, check=True, capture_output=True)
             print(f"PlantUML Output: {result.stdout}")
 
+            # 统一的图像加载和显示逻辑
+            self.displayImage(temp_png_path)
+
         except subprocess.CalledProcessError as e:
             print(f"Error during subprocess execution: {e}")
             self.imageLabel.setText("Error generating UML diagram.")
-            return
-
-        # 统一的图像加载和显示逻辑
-        self.displayImage(temp_png_path)
+            error_occurred = True
+            # 即使出现异常，也尝试执行 displayImage
+            self.displayImage(temp_png_path)
 
         finally:
-            # 删除临时 PNG 文件
+            # 删除临时 PNG 文件和目录
             if temp_png_path and os.path.exists(temp_png_path):
                 try:
                     os.unlink(temp_png_path)
@@ -246,6 +250,8 @@ class UMLViewer(QMainWindow):
 
             # 发射信号
             self.focusSignal.emit()
+            if error_occurred:
+                return
 
     def displayImage(self, imagePath):
         print(f"Loading PNG file: {imagePath}")
