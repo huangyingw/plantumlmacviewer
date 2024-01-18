@@ -3,6 +3,7 @@ from PyQt5.QtCore import pyqtSignal
 import AppKit
 from watchdog.events import FileSystemEventHandler
 import sys
+import logging
 import tempfile
 from PyQt5.QtWidgets import (
     QApplication,
@@ -20,6 +21,16 @@ import subprocess
 import os
 import socket
 import threading
+
+
+# 配置日志
+# 将日志文件放在用户的主目录下
+log_file = os.path.expanduser("~/application.log")
+logging.basicConfig(
+    filename=log_file,
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s:%(message)s",
+)
 
 
 class FileChangeHandler(FileSystemEventHandler):
@@ -63,13 +74,13 @@ class CentralApp(QApplication):
             s.bind((host, port))
             s.listen()
 
-            print(f"Listening on {host}:{port}")
+            logging.info(f"Listening on {host}:{port}")
 
             while True:
                 # 等待连接
                 conn, addr = s.accept()
                 with conn:
-                    print(f"Connected by {addr}")
+                    logging.info(f"Connected by {addr}")
 
                     # 接收数据
                     while True:
@@ -78,7 +89,7 @@ class CentralApp(QApplication):
                             break
 
                         file_path = data.decode().strip()
-                        print(f"Received file path: {file_path}")
+                        logging.info(f"Received file path: {file_path}")
 
                         # 总是发送 OpenWindowEvent
                         QCoreApplication.postEvent(
@@ -97,13 +108,13 @@ class CentralApp(QApplication):
 
     def openNewWindow(self, filePath=None):
         # 确保路径是规范化的
-        if filePath:
+        if filePath and not filePath.startswith("fugitive:///"):
             filePath = os.path.abspath(filePath)
 
         # 如果文件已经打开，激活对应的窗口
         if filePath in self.fileWindowMap:
             window = self.fileWindowMap[filePath]
-            print(f"Activating existing window for {filePath}")
+            logging.info(f"Activating existing window for {filePath}")
             window.raise_()
             window.activateWindow()
             QApplication.processEvents()  # 处理事件队列
@@ -123,8 +134,9 @@ class CentralApp(QApplication):
         new_window.activateWindow()
 
     def startFileWatcher(self, filePath, viewer):
-        # 确保路径是规范化的
-        filePath = os.path.abspath(filePath)
+        if not filePath.startswith("fugitive:///"):
+            # 确保路径是规范化的
+            filePath = os.path.abspath(filePath)
         # 获取目录路径
         directory = os.path.dirname(filePath)
 
@@ -186,7 +198,7 @@ class UMLViewer(QMainWindow):
         filePath, _ = QFileDialog.getOpenFileName(
             self, "Open file", "", "PlantUML files (*.puml)"
         )
-        if filePath:
+        if not filePath.startswith("fugitive:///"):
             # 确保路径是规范化的
             filePath = os.path.abspath(filePath)
             self.centralApp.openNewWindow(filePath)
@@ -219,15 +231,15 @@ class UMLViewer(QMainWindow):
                 temp_dir,
                 filePath,
             ]
-            print(f"Running command: {' '.join(command)}")
+            logging.info(f"Running command: {' '.join(command)}")
             result = subprocess.run(command, check=True, capture_output=True)
-            print(f"PlantUML Output: {result.stdout}")
+            logging.info(f"PlantUML Output: {result.stdout}")
 
             # 统一的图像加载和显示逻辑
             self.displayImage(temp_png_path)
 
         except subprocess.CalledProcessError as e:
-            print(f"Error during subprocess execution: {e}")
+            logging.exception(f"Error during subprocess execution: {e}")
             self.imageLabel.setText("Error generating UML diagram.")
             error_occurred = True
             # 即使出现异常，也尝试执行 displayImage
@@ -239,14 +251,14 @@ class UMLViewer(QMainWindow):
                 try:
                     os.unlink(temp_png_path)
                 except Exception as e:
-                    print(f"Error removing temp file: {e}")
+                    logging.info(f"Error removing temp file: {e}")
 
             # 删除临时目录
             if temp_dir and os.path.exists(temp_dir):
                 try:
                     os.rmdir(temp_dir)
                 except Exception as e:
-                    print(f"Error removing temp dir: {e}")
+                    logging.info(f"Error removing temp dir: {e}")
 
             # 发射信号
             self.focusSignal.emit()
@@ -254,16 +266,16 @@ class UMLViewer(QMainWindow):
                 return
 
     def displayImage(self, imagePath):
-        print(f"Loading PNG file: {imagePath}")
+        logging.info(f"Loading PNG file: {imagePath}")
         self.imageLabel.clear()  # 清空现有图像
         image = QImage(imagePath)
         if not image.isNull():
             pixmap = QPixmap.fromImage(image)
             self.imageLabel.setPixmap(pixmap)
-            print("Image updated successfully.")
+            logging.info("Image updated successfully.")
         else:
-            self.imageLabel.setText("Failed to load the generated image.")
-            print("Failed to load the generated image.")
+            self.imageLabel.setText(f"Failed to load the generated image.")
+            logging.info("Failed to load the generated image.")
 
     def postFocusProcessing(self):
         self.raise_()
