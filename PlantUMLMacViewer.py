@@ -3,6 +3,7 @@ from PyQt5.QtCore import pyqtSignal
 import AppKit
 from watchdog.events import FileSystemEventHandler
 import sys
+import shutil
 import logging
 import tempfile
 from PyQt5.QtWidgets import (
@@ -206,12 +207,21 @@ class UMLViewer(QMainWindow):
     def loadAndDisplayUML(self, filePath):
         temp_png_path = None
         temp_dir = None
+        temp_uml_path = None  # 添加一个变量用于存储临时 UML 文件的路径
         error_occurred = False
 
         try:
             self.previousApp = self.getActiveAppName()
             self.setFocusPolicy(Qt.NoFocus)
-            # 在加载 UML 之前，设置窗口标题为文件名
+
+            # 如果路径以 fugitive:/// 开头，复制内容到临时文件
+            if filePath.startswith("fugitive:///"):
+                temp_uml_path = tempfile.mktemp(suffix=".puml")  # 创建临时文件
+                shutil.copyfile(
+                    filePath.replace("fugitive:///", ""), temp_uml_path
+                )
+                filePath = temp_uml_path  # 更新 filePath 为临时文件路径
+
             self.setWindowTitle(os.path.basename(filePath))
             plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
 
@@ -246,6 +256,12 @@ class UMLViewer(QMainWindow):
             self.displayImage(temp_png_path)
 
         finally:
+            # 删除临时 UML 文件
+            if temp_uml_path and os.path.exists(temp_uml_path):
+                try:
+                    os.unlink(temp_uml_path)
+                except Exception as e:
+                    logging.info(f"Error removing temp UML file: {e}")
             # 删除临时 PNG 文件和目录
             if temp_png_path and os.path.exists(temp_png_path):
                 try:
