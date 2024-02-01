@@ -1,4 +1,5 @@
-from .central_app import CentralApp
+from central_app import CentralApp
+from logger import setup_logging
 import sys
 
 
