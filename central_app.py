@@ -11,6 +11,7 @@ from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QCoreApplication
 from watchdog.observers import Observer
 import sys
+import tempfile
 import threading
 import socket
 import os
@@ -18,6 +19,8 @@ from events import OpenWindowEvent
 from file_change_handler import FileChangeHandler
 from logger import setup_logging
 import logging
+import AppKit
+import subprocess
 
 
 class CentralApp(QApplication):
