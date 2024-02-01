@@ -3,7 +3,7 @@ import os
 
 
 def setup_logging():
-    log_file = os.path.expanduser("~/application.log")
+    log_file = os.path.expanduser("~/plantumlmacviewer.log")
     logging.basicConfig(
         filename=log_file,
         level=logging.INFO,
