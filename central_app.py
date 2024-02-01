@@ -51,30 +51,23 @@ class CentralApp(QApplication):
                 conn, addr = s.accept()
                 with conn:
                     logging.info(f"Connected by {addr}")
-
-                    # 接收数据
-                    while True:
-                        data = conn.recv(1024)
-                        if not data:
-                            break
-
-                        file_path = data.decode().strip()
-                        logging.info(f"Received file path: {file_path}")
-
-                        # 总是发送 OpenWindowEvent
+                    data = conn.recv(1024).decode().strip()
+                    if data:
+                        file_paths = data.split("\n")  # 分割接收到的文件路径
+                        logging.info(f"Received file paths: {file_paths}")
                         QCoreApplication.postEvent(
-                            self, OpenWindowEvent(file_path)
+                            self, OpenWindowEvent(file_paths)
                         )
 
     def customEvent(self, event):
         if event.type() == OpenWindowEvent.EVENT_TYPE:
-            filePath = event.filePath
-            if filePath in self.fileWindowMap:
-                window = self.fileWindowMap[filePath]
-                window.raise_()
-                window.activateWindow()
-            else:
-                self.openNewWindow(filePath)
+            for filePath in event.filePaths:  # 循环遍历文件路径列表
+                if filePath in self.fileWindowMap:
+                    window = self.fileWindowMap[filePath]
+                    window.raise_()
+                    window.activateWindow()
+                else:
+                    self.openNewWindow(filePath)
 
     def openNewWindow(self, filePath=None):
         # 确保路径是规范化的
