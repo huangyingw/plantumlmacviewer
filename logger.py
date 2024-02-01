@@ -1,6 +1,7 @@
 import logging
 import os
 
+
 def setup_logging():
     log_file = os.path.expanduser("~/plantumlviewerserver.log")
     logging.basicConfig(
