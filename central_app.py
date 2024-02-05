@@ -213,15 +213,19 @@ class UMLViewer(QMainWindow):
             if temp_png_path and os.path.exists(temp_png_path):
                 try:
                     os.unlink(temp_png_path)
+                    logging.info(
+                        f"Temp PNG file {temp_png_path} removed successfully."
+                    )
                 except Exception as e:
-                    logging.info(f"Error removing temp file: {e}")
+                    logging.error(f"Error removing temp file: {e}")
 
             # 删除临时目录
             if temp_dir and os.path.exists(temp_dir):
                 try:
                     os.rmdir(temp_dir)
+                    logging.info(f"Temp dir {temp_dir} removed successfully.")
                 except Exception as e:
-                    logging.info(f"Error removing temp dir: {e}")
+                    logging.error(f"Error removing temp dir: {e}")
 
             # 发射信号
             self.focusSignal.emit()
