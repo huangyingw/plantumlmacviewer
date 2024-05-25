@@ -1,0 +1,556 @@
+diff --git a/.gitconfig b/.gitconfig
+new file mode 100644
+--- /dev/null
++++ ./.gitconfig
+@@ -0,0 +1,11 @@
++[deploy]
++    host = localhost
++    path = ~/Dropbox/myproject/git/system_design/plantumlmacviewer
++[remote "origin"]
++    url = git@github.com:huangyingw/plantumlmacviewer.git
++    fetch = +refs/heads/*:refs/remotes/origin/*
++[push]
++    remote = origin
++[gsync]
++    remote = origin
++    target = 708faa069669b6ee729b85a6cbdc9571dde4c4f9
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+--- /dev/null
++++ ./.gitignore
+@@ -0,0 +1,2 @@
++go.sum
++plantumlviewerserver.log
+diff --git a/PlantUMLMacViewer.py b/PlantUMLMacViewer.py
+deleted file mode 100644
+--- ./PlantUMLMacViewer.py
++++ /dev/null
+@@ -1,68 +0,0 @@
+-import sys
+-from PyQt5.QtWidgets import (
+-    QApplication,
+-    QMainWindow,
+-    QLabel,
+-    QScrollArea,
+-    QVBoxLayout,
+-    QWidget,
+-)
+-from PyQt5.QtGui import QPixmap, QImage
+-from PyQt5.QtCore import Qt
+-import plantuml
+-
+-
+-class UMLViewer(QMainWindow):
+-    def __init__(self):
+-        super().__init__()
+-        self.initUI()
+-
+-    def initUI(self):
+-        self.setWindowTitle("PlantUML Viewer")
+-        self.setGeometry(100, 100, 800, 600)
+-
+-        # 容纳UML图像的滚动区域
+-        self.scrollArea = QScrollArea(self)
+-        self.setCentralWidget(self.scrollArea)
+-
+-        # UML图像标签
+-        self.imageLabel = QLabel()
+-        self.scrollArea.setWidget(self.imageLabel)
+-
+-        # 加载并显示UML图表
+-        self.loadAndDisplayUML("example.plantuml")
+-
+-        # 设置快捷键
+-        self.setupShortcuts()
+-
+-    def loadAndDisplayUML(self, filePath):
+-        # 渲染PlantUML图表
+-        uml_image = plantuml.PlantUML(
+-            url="http://www.plantuml.com/plantuml/img/"
+-        )
+-        img = uml_image.processes_file(filePath)
+-        image = QImage.fromData(img)
+-        pixmap = QPixmap.fromImage(image)
+-        self.imageLabel.setPixmap(pixmap)
+-
+-    def setupShortcuts(self):
+-        # 设置快捷键以实现缩放等功能
+-        pass
+-
+-    def keyPressEvent(self, event):
+-        # 处理快捷键事件
+-        if event.key() == Qt.Key_Plus:
+-            # 缩放代码
+-            pass
+-        elif event.key() == Qt.Key_Minus:
+-            # 缩放代码
+-            pass
+-        else:
+-            super().keyPressEvent(event)
+-
+-
+-if __name__ == "__main__":
+-    app = QApplication(sys.argv)
+-    viewer = UMLViewer()
+-    viewer.show()
+-    sys.exit(app.exec_())
+diff --git a/PlantUMLViewer.go b/PlantUMLViewer.go
+new file mode 100644
+--- /dev/null
++++ ./PlantUMLViewer.go
+@@ -0,0 +1,61 @@
++package main
++
++import (
++	"fyne.io/fyne/v2/app"
++	"fyne.io/fyne/v2/canvas"
++	"fyne.io/fyne/v2/container"
++	"fyne.io/fyne/v2/dialog"
++	"fyne.io/fyne/v2/storage"
++	"fyne.io/fyne/v2/widget"
++	"log"
++	"os/exec"
++	"path/filepath"
++)
++
++func main() {
++	myApp := app.New()
++	myWindow := myApp.NewWindow("PlantUML Viewer")
++
++	image := canvas.NewImageFromFile("")
++	image.FillMode = canvas.ImageFillContain // 可根据需要调整填充模式
++
++	openFileButton := widget.NewButton("Open .puml File", func() {
++		dialog.ShowFileOpen(func(file storage.URIReadCloser, err error) {
++			if err != nil {
++				log.Println("Failed to open file:", err)
++				return
++			}
++			if file == nil {
++				log.Println("No file chosen")
++				return
++			}
++			go processFile(file.URI().Path(), image)
++		}, myWindow)
++	})
++
++	myWindow.SetContent(container.NewVBox(
++		image,
++		openFileButton,
++	))
++
++	myWindow.ShowAndRun()
++}
++
++func processFile(filePath string, image *canvas.Image) {
++	// 假设 PlantUML jar 文件位于 "/path/to/plantuml.jar"
++	plantumlJarPath := "/path/to/plantuml.jar"
++	pngFilePath := filepath.Dir(filePath) + string(filepath.Separator) +
++		filepath.Base(filePath) + ".png"
++
++	// 构建并运行 PlantUML 命令
++	cmd := exec.Command("java", "-jar", plantumlJarPath, "-tpng", filePath, "-o", pngFilePath)
++	err := cmd.Run()
++	if err != nil {
++		log.Println("Failed to execute PlantUML:", err)
++		return
++	}
++
++	// 更新图像
++	image.File = pngFilePath
++	image.Refresh()
++}
+diff --git a/central_app.py b/central_app.py
+new file mode 100644
+--- /dev/null
++++ ./central_app.py
+@@ -0,0 +1,278 @@
++from PyQt5.QtWidgets import (
++    QApplication,
++    QMainWindow,
++    QScrollArea,
++    QLabel,
++    QShortcut,
++    QFileDialog,
++    QSizePolicy,
++)
++from PyQt5.QtGui import QPixmap, QImage, QKeySequence
++from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QCoreApplication
++from watchdog.observers import Observer
++import sys
++import tempfile
++import threading
++import socket
++import os
++from events import OpenWindowEvent
++from file_change_handler import FileChangeHandler
++from logger import setup_logging
++import logging
++import AppKit
++import subprocess
++
++
++class CentralApp(QApplication):
++    def __init__(self, argv):
++        super().__init__(argv)
++        self.windows = []  # 存储所有打开的窗口
++        self.fileWindowMap = {}  # 文件路径到窗口的映射
++        self.observers = {}  # 目录到 Observer 的映射
++
++        # 启动套接字监听线程
++        socketThread = threading.Thread(target=self.listenToSocket)
++        socketThread.daemon = True
++        socketThread.start()
++
++    def listenToSocket(self):
++        host = "localhost"  # 或者其他适合您需求的主机地址
++        port = 12345  # 选择一个适合的端口号
++
++        # 创建套接字
++        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
++            s.bind((host, port))
++            s.listen()
++
++            logging.info(f"Listening on {host}:{port}")
++
++            while True:
++                # 等待连接
++                conn, addr = s.accept()
++                with conn:
++                    logging.info(f"Connected by {addr}")
++                    data = conn.recv(1024).decode().strip()
++                    if data:
++                        file_paths = data.split("\n")  # 分割接收到的文件路径
++                        logging.info(f"Received file paths: {file_paths}")
++                        QCoreApplication.postEvent(
++                            self, OpenWindowEvent(file_paths)
++                        )
++
++    def customEvent(self, event):
++        if event.type() == OpenWindowEvent.EVENT_TYPE:
++            for filePath in event.filePaths:  # 循环遍历文件路径列表
++                if filePath in self.fileWindowMap:
++                    window = self.fileWindowMap[filePath]
++                    window.raise_()
++                    window.activateWindow()
++                else:
++                    self.openNewWindow(filePath)
++
++    def openNewWindow(self, filePath=None):
++        # 确保路径是规范化的
++        if filePath and not filePath.startswith("fugitive:///"):
++            filePath = os.path.abspath(filePath)
++
++        # 如果文件已经打开，激活对应的窗口
++        if filePath in self.fileWindowMap:
++            window = self.fileWindowMap[filePath]
++            logging.info(f"Activating existing window for {filePath}")
++            window.raise_()
++            window.activateWindow()
++            QApplication.processEvents()  # 处理事件队列
++            return
++
++        # 创建新窗口并将其添加到窗口列表和文件映射中
++        new_window = UMLViewer(self)
++        self.windows.append(new_window)
++        if filePath:
++            self.fileWindowMap[filePath] = new_window
++            new_window.loadAndDisplayUML(filePath)
++            self.startFileWatcher(filePath, new_window)
++        new_window.show()
++
++        # 新增代码：激活并将新窗口置于前台
++        new_window.raise_()
++        new_window.activateWindow()
++
++    def startFileWatcher(self, filePath, viewer):
++        if not filePath.startswith("fugitive:///"):
++            # 确保路径是规范化的
++            filePath = os.path.abspath(filePath)
++        # 获取目录路径
++        directory = os.path.dirname(filePath)
++
++        # 检查此目录是否已经有一个监控器，如果有，只需添加事件处理器，而不是创建新的监控器
++        if directory in self.observers:
++            # 为已存在的监控器添加事件处理器
++            event_handler = FileChangeHandler(viewer, filePath)
++            self.observers[directory].schedule(
++                event_handler, directory, recursive=False
++            )
++        else:
++            # 创建新的 Observer
++            observer = Observer()
++            self.observers[directory] = observer
++            event_handler = FileChangeHandler(viewer, filePath)
++            observer.schedule(event_handler, directory, recursive=False)
++            observer.start()
++
++
++class UMLViewer(QMainWindow):
++    focusSignal = pyqtSignal()
++
++    def __init__(self, centralApp):
++        super().__init__()
++        self.centralApp = centralApp
++        self.initUI()
++        self.focusSignal.connect(self.postFocusProcessing)
++
++    def initUI(self):
++        self.setWindowTitle("PlantUML Viewer")
++
++        # 容纳UML图像的滚动区域
++        self.scrollArea = QScrollArea(self)
++        self.setCentralWidget(self.scrollArea)
++
++        # UML图像标签
++        self.imageLabel = QLabel()
++        self.imageLabel.setAlignment(Qt.AlignCenter)  # 居中对齐
++
++        # 设置图像的尺寸策略，使其能够根据可用空间自动调整大小
++        self.imageLabel.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
++        self.imageLabel.setScaledContents(True)  # 允许图像根据标签大小缩放
++        self.scrollArea.setWidget(self.imageLabel)
++        self.scrollArea.setWidgetResizable(True)  # 允许滚动区域适应内容大小
++
++        # 设置快捷键
++        self.setupShortcuts()
++
++        # 窗口最大化
++        self.showMaximized()
++
++    def setupShortcuts(self):
++        # 使用 QShortcut 设置快捷键
++        self.openFileShortcut = QShortcut(QKeySequence("Ctrl+O"), self)
++        self.openFileShortcut.activated.connect(self.openFile)
++
++    def openFile(self):
++        # 修改 openFile 方法以支持在新窗口中打开文件
++        filePath, _ = QFileDialog.getOpenFileName(
++            self, "Open file", "", "PlantUML files (*.puml)"
++        )
++        if not filePath.startswith("fugitive:///"):
++            # 确保路径是规范化的
++            filePath = os.path.abspath(filePath)
++            self.centralApp.openNewWindow(filePath)
++
++    def loadAndDisplayUML(self, filePath):
++        temp_png_path = None
++        temp_dir = None
++        error_occurred = False
++
++        try:
++            self.previousApp = self.getActiveAppName()
++            self.setFocusPolicy(Qt.NoFocus)
++            # 在加载 UML 之前，设置窗口标题为文件名
++            self.setWindowTitle(os.path.basename(filePath))
++            plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
++
++            # 使用临时文件来保存生成的 PNG
++            temp_dir = tempfile.mkdtemp()  # 创建临时目录
++            temp_png_path = os.path.join(
++                temp_dir, os.path.basename(filePath).replace(".puml", ".png")
++            )
++
++            # 更新 PlantUML 命令以使用临时目录
++            command = [
++                "java",
++                "-jar",
++                plantuml_jar_path,
++                "-tpng",
++                "-o",
++                temp_dir,
++                filePath,
++            ]
++            logging.info(f"Running command: {' '.join(command)}")
++            result = subprocess.run(command, check=True, capture_output=True)
++            logging.info(f"PlantUML Output: {result.stdout}")
++
++            # 统一的图像加载和显示逻辑
++            self.displayImage(temp_png_path)
++
++        except subprocess.CalledProcessError as e:
++            logging.exception(f"Error during subprocess execution: {e}")
++            self.imageLabel.setText("Error generating UML diagram.")
++            error_occurred = True
++            # 即使出现异常，也尝试执行 displayImage
++            self.displayImage(temp_png_path)
++
++        finally:
++            # 删除临时 PNG 文件和目录
++            if temp_png_path and os.path.exists(temp_png_path):
++                try:
++                    os.unlink(temp_png_path)
++                    logging.info(
++                        f"Temp PNG file {temp_png_path} removed successfully."
++                    )
++                except Exception as e:
++                    logging.error(f"Error removing temp file: {e}")
++
++            # 删除临时目录
++            if temp_dir and os.path.exists(temp_dir):
++                try:
++                    os.rmdir(temp_dir)
++                    logging.info(f"Temp dir {temp_dir} removed successfully.")
++                except Exception as e:
++                    logging.error(f"Error removing temp dir: {e}")
++
++            # 发射信号
++            self.focusSignal.emit()
++            if error_occurred:
++                return
++
++    def displayImage(self, imagePath):
++        logging.info(f"Loading PNG file: {imagePath}")
++        self.imageLabel.clear()  # 清空现有图像
++        image = QImage(imagePath)
++        if not image.isNull():
++            pixmap = QPixmap.fromImage(image)
++            self.imageLabel.setPixmap(pixmap)
++            logging.info("Image updated successfully.")
++        else:
++            self.imageLabel.setText(f"Failed to load the generated image.")
++            logging.info("Failed to load the generated image.")
++
++    def postFocusProcessing(self):
++        self.raise_()
++        self.activateWindow()
++        QApplication.processEvents()
++        self.setFocusToApp(self.previousApp)
++
++    def getActiveAppName(self):
++        # 获取当前活动的应用程序的名称
++        ws = AppKit.NSWorkspace.sharedWorkspace()
++        frontmostApp = ws.frontmostApplication()
++        return frontmostApp.localizedName()
++
++    def setFocusToApp(self, appName):
++        # 将焦点设置到指定的应用程序
++        ws = AppKit.NSWorkspace.sharedWorkspace()
++        for app in ws.runningApplications():
++            if app.localizedName() == appName:
++                app.activateWithOptions_(
++                    AppKit.NSApplicationActivateIgnoringOtherApps
++                )
++                break
++
++    def keyPressEvent(self, event):
++        # 处理快捷键事件
++        if event.key() == Qt.Key_Plus:
++            # 缩放代码
++            pass
++        elif event.key() == Qt.Key_Minus:
++            # 缩放代码
++            pass
++        else:
++            super().keyPressEvent(event)
+diff --git a/events.py b/events.py
+new file mode 100644
+--- /dev/null
++++ ./events.py
+@@ -0,0 +1,9 @@
++from PyQt5.QtCore import QEvent
++
++
++class OpenWindowEvent(QEvent):
++    EVENT_TYPE = QEvent.Type(QEvent.registerEventType())
++
++    def __init__(self, filePaths):
++        super().__init__(OpenWindowEvent.EVENT_TYPE)
++        self.filePaths = filePaths  # filePaths 现在是一个列表
+diff --git a/file_change_handler.py b/file_change_handler.py
+new file mode 100644
+--- /dev/null
++++ ./file_change_handler.py
+@@ -0,0 +1,12 @@
++from watchdog.events import FileSystemEventHandler
++
++
++class FileChangeHandler(FileSystemEventHandler):
++    def __init__(self, viewer, filePath):
++        super().__init__()
++        self.viewer = viewer
++        self.filePath = filePath
++
++    def on_modified(self, event):
++        if event.src_path == self.filePath:
++            self.viewer.loadAndDisplayUML(self.filePath)
+diff --git a/go.mod b/go.mod
+new file mode 100644
+--- /dev/null
++++ ./go.mod
+@@ -0,0 +1,35 @@
++module myGoProject
++
++go 1.21.4
++
++require fyne.io/fyne/v2 v2.4.1
++
++require (
++	fyne.io/systray v1.10.1-0.20230722100817-88df1e0ffa9a // indirect
++	github.com/davecgh/go-spew v1.1.1 // indirect
++	github.com/fredbi/uri v1.0.0 // indirect
++	github.com/fsnotify/fsnotify v1.6.0 // indirect
++	github.com/fyne-io/gl-js v0.0.0-20220119005834-d2da28d9ccfe // indirect
++	github.com/fyne-io/glfw-js v0.0.0-20220120001248-ee7290d23504 // indirect
++	github.com/fyne-io/image v0.0.0-20220602074514-4956b0afb3d2 // indirect
++	github.com/go-gl/gl v0.0.0-20211210172815-726fda9656d6 // indirect
++	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20221017161538-93cebf72946b // indirect
++	github.com/go-text/render v0.0.0-20230619120952-35bccb6164b8 // indirect
++	github.com/go-text/typesetting v0.0.0-20230616162802-9c17dd34aa4a // indirect
++	github.com/godbus/dbus/v5 v5.1.0 // indirect
++	github.com/gopherjs/gopherjs v1.17.2 // indirect
++	github.com/jsummers/gobmp v0.0.0-20151104160322-e2ba15ffa76e // indirect
++	github.com/pmezard/go-difflib v1.0.0 // indirect
++	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
++	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
++	github.com/stretchr/testify v1.8.4 // indirect
++	github.com/tevino/abool v1.2.0 // indirect
++	github.com/yuin/goldmark v1.5.5 // indirect
++	golang.org/x/image v0.11.0 // indirect
++	golang.org/x/mobile v0.0.0-20230531173138-3c911d8e3eda // indirect
++	golang.org/x/net v0.14.0 // indirect
++	golang.org/x/sys v0.11.0 // indirect
++	golang.org/x/text v0.12.0 // indirect
++	gopkg.in/yaml.v3 v3.0.1 // indirect
++	honnef.co/go/js/dom v0.0.0-20210725211120-f030747120f2 // indirect
++)
+diff --git a/logger.py b/logger.py
+new file mode 100644
+--- /dev/null
++++ ./logger.py
+@@ -0,0 +1,17 @@
++import logging
++import os
++
++
++def setup_logging():
++    # 获取当前文件的绝对路径
++    current_file_path = os.path.abspath(__file__)
++    # 获取当前文件所在的目录
++    current_dir = os.path.dirname(current_file_path)
++    # 创建日志文件路径，位于当前目录下
++    log_file = os.path.join(current_dir, "plantumlviewerserver.log")
++
++    logging.basicConfig(
++        filename=log_file,
++        level=logging.INFO,
++        format="%(asctime)s %(levelname)s:%(message)s",
++    )
+diff --git a/main.py b/main.py
+new file mode 100644
+--- /dev/null
++++ ./main.py
+@@ -0,0 +1,13 @@
++from central_app import CentralApp
++from logger import setup_logging
++import sys
++
++
++def main():
++    setup_logging()
++    app = CentralApp(sys.argv)
++    sys.exit(app.exec_())
++
++
++if __name__ == "__main__":
++    main()
