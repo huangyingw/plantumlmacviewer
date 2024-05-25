@@ -9,3 +9,9 @@
 [gsync]
     remote = origin
     target = 708faa069669b6ee729b85a6cbdc9571dde4c4f9
+[gdio]
+    ignore = ./.gitconfig
+    ignore = ./.gitignore
+    ignore = ./PlantUMLMacViewer.py
+    ignore = ./PlantUMLViewer.go
+    ignore = ./go.mod
