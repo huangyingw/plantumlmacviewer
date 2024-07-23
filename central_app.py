@@ -26,6 +26,7 @@ import subprocess
 class CentralApp(QApplication):
     def __init__(self, argv):
         super().__init__(argv)
+        logging.debug("CentralApp initialized")
         self.windows = []  # 存储所有打开的窗口
         self.fileWindowMap = {}  # 文件路径到窗口的映射
         self.observers = {}  # 目录到 Observer 的映射
@@ -60,6 +61,7 @@ class CentralApp(QApplication):
                         )
 
     def customEvent(self, event):
+        logging.debug(f"customEvent triggered with event type: {event.type()}")
         if event.type() == OpenWindowEvent.EVENT_TYPE:
             for filePath in event.filePaths:  # 循环遍历文件路径列表
                 if filePath in self.fileWindowMap:
@@ -70,6 +72,7 @@ class CentralApp(QApplication):
                     self.openNewWindow(filePath)
 
     def openNewWindow(self, filePath=None):
+        logging.debug(f"openNewWindow called with filePath: {filePath}")
         # 确保路径是规范化的
         if filePath and not filePath.startswith("fugitive:///"):
             filePath = os.path.abspath(filePath)
@@ -97,6 +100,7 @@ class CentralApp(QApplication):
         new_window.activateWindow()
 
     def startFileWatcher(self, filePath, viewer):
+        logging.debug(f"startFileWatcher called with filePath: {filePath}")
         if not filePath.startswith("fugitive:///"):
             # 确保路径是规范化的
             filePath = os.path.abspath(filePath)
@@ -124,6 +128,7 @@ class UMLViewer(QMainWindow):
 
     def __init__(self, centralApp):
         super().__init__()
+        logging.debug("UMLViewer initialized")
         self.centralApp = centralApp
         self.initUI()
         self.focusSignal.connect(self.postFocusProcessing)
@@ -176,7 +181,7 @@ class UMLViewer(QMainWindow):
             self.setFocusPolicy(Qt.NoFocus)
             # 在加载 UML 之前，设置窗口标题为文件名
             self.setWindowTitle(os.path.basename(filePath))
-            plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
+            plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2024.6/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
 
             # 使用临时文件来保存生成的 PNG
             temp_dir = tempfile.mkdtemp()  # 创建临时目录
