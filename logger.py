@@ -3,15 +3,15 @@ import os
 
 
 def setup_logging():
-    # 获取当前文件的绝对路径
-    current_file_path = os.path.abspath(__file__)
-    # 获取当前文件所在的目录
-    current_dir = os.path.dirname(current_file_path)
-    # 创建日志文件路径，位于当前目录下
-    log_file = os.path.join(current_dir, "plantumlviewerserver.log")
+    # 获取日志文件的路径
+    log_dir = os.path.expanduser("~/")
+    log_file = os.path.join(log_dir, "plantumlmacviewer.log")
+
+    # 确保日志目录存在
+    os.makedirs(log_dir, exist_ok=True)
 
     logging.basicConfig(
         filename=log_file,
-        level=logging.INFO,
+        level=logging.DEBUG,  # 将日志级别设置为DEBUG以捕获所有日志
         format="%(asctime)s %(levelname)s:%(message)s",
     )
