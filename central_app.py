@@ -21,6 +21,8 @@ from logger import setup_logging
 import logging
 import AppKit
 import subprocess
+import os
+import glob
 
 
 class CentralApp(QApplication):
@@ -181,7 +183,14 @@ class UMLViewer(QMainWindow):
             self.setFocusPolicy(Qt.NoFocus)
             # 在加载 UML 之前，设置窗口标题为文件名
             self.setWindowTitle(os.path.basename(filePath))
-            plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2024.6/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
+            plantuml_base_path = "/usr/local/Cellar/plantuml/"
+            latest_version_path = max(
+                glob.glob(os.path.join(plantuml_base_path, "*/")),
+                key=os.path.getmtime,
+            )
+            plantuml_jar_path = os.path.join(
+                latest_version_path, "libexec/plantuml.jar"
+            )
 
             # 使用临时文件来保存生成的 PNG
             temp_dir = tempfile.mkdtemp()  # 创建临时目录
