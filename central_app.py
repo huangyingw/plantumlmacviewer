@@ -54,13 +54,20 @@ class CentralApp(QApplication):
                 conn, addr = s.accept()
                 with conn:
                     logging.info(f"Connected by {addr}")
-                    data = conn.recv(1024).decode().strip()
-                    if data:
-                        file_paths = data.split("\n")  # 分割接收到的文件路径
-                        logging.info(f"Received file paths: {file_paths}")
-                        QCoreApplication.postEvent(
-                            self, OpenWindowEvent(file_paths)
-                        )
+                    data = b""
+                    while True:
+                        packet = conn.recv(4096)
+                        if not packet:
+                            break
+                        data += packet
+
+                    file_paths = (
+                        data.decode().strip().split("\n")
+                    )  # 分割接收到的文件路径
+                    logging.info(f"Received file paths: {file_paths}")
+                    QCoreApplication.postEvent(
+                        self, OpenWindowEvent(file_paths)
+                    )
 
     def customEvent(self, event):
         logging.debug(f"customEvent triggered with event type: {event.type()}")
