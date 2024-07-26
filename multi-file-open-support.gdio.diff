@@ -2,7 +2,7 @@ diff --git a/central_app.py b/central_app.py
 new file mode 100644
 --- /dev/null
 +++ ./central_app.py
-@@ -0,0 +1,278 @@
+@@ -0,0 +1,299 @@
 +from PyQt5.QtWidgets import (
 +    QApplication,
 +    QMainWindow,
@@ -26,11 +26,14 @@ new file mode 100644
 +import logging
 +import AppKit
 +import subprocess
++import os
++import glob
 +
 +
 +class CentralApp(QApplication):
 +    def __init__(self, argv):
 +        super().__init__(argv)
++        logging.debug("CentralApp initialized")
 +        self.windows = []  # 存储所有打开的窗口
 +        self.fileWindowMap = {}  # 文件路径到窗口的映射
 +        self.observers = {}  # 目录到 Observer 的映射
@@ -56,15 +59,23 @@ new file mode 100644
 +                conn, addr = s.accept()
 +                with conn:
 +                    logging.info(f"Connected by {addr}")
-+                    data = conn.recv(1024).decode().strip()
-+                    if data:
-+                        file_paths = data.split("\n")  # 分割接收到的文件路径
-+                        logging.info(f"Received file paths: {file_paths}")
-+                        QCoreApplication.postEvent(
-+                            self, OpenWindowEvent(file_paths)
-+                        )
++                    data = b""
++                    while True:
++                        packet = conn.recv(4096)
++                        if not packet:
++                            break
++                        data += packet
++
++                    file_paths = (
++                        data.decode().strip().split("\n")
++                    )  # 分割接收到的文件路径
++                    logging.info(f"Received file paths: {file_paths}")
++                    QCoreApplication.postEvent(
++                        self, OpenWindowEvent(file_paths)
++                    )
 +
 +    def customEvent(self, event):
++        logging.debug(f"customEvent triggered with event type: {event.type()}")
 +        if event.type() == OpenWindowEvent.EVENT_TYPE:
 +            for filePath in event.filePaths:  # 循环遍历文件路径列表
 +                if filePath in self.fileWindowMap:
@@ -75,6 +86,7 @@ new file mode 100644
 +                    self.openNewWindow(filePath)
 +
 +    def openNewWindow(self, filePath=None):
++        logging.debug(f"openNewWindow called with filePath: {filePath}")
 +        # 确保路径是规范化的
 +        if filePath and not filePath.startswith("fugitive:///"):
 +            filePath = os.path.abspath(filePath)
@@ -102,6 +114,7 @@ new file mode 100644
 +        new_window.activateWindow()
 +
 +    def startFileWatcher(self, filePath, viewer):
++        logging.debug(f"startFileWatcher called with filePath: {filePath}")
 +        if not filePath.startswith("fugitive:///"):
 +            # 确保路径是规范化的
 +            filePath = os.path.abspath(filePath)
@@ -129,6 +142,7 @@ new file mode 100644
 +
 +    def __init__(self, centralApp):
 +        super().__init__()
++        logging.debug("UMLViewer initialized")
 +        self.centralApp = centralApp
 +        self.initUI()
 +        self.focusSignal.connect(self.postFocusProcessing)
@@ -181,7 +195,14 @@ new file mode 100644
 +            self.setFocusPolicy(Qt.NoFocus)
 +            # 在加载 UML 之前，设置窗口标题为文件名
 +            self.setWindowTitle(os.path.basename(filePath))
-+            plantuml_jar_path = "/usr/local/Cellar/plantuml/1.2023.13/libexec/plantuml.jar"  # 替换为您的 PlantUML jar 文件路径
++            plantuml_base_path = "/usr/local/Cellar/plantuml/"
++            latest_version_path = max(
++                glob.glob(os.path.join(plantuml_base_path, "*/")),
++                key=os.path.getmtime,
++            )
++            plantuml_jar_path = os.path.join(
++                latest_version_path, "libexec/plantuml.jar"
++            )
 +
 +            # 使用临时文件来保存生成的 PNG
 +            temp_dir = tempfile.mkdtemp()  # 创建临时目录
@@ -331,7 +352,7 @@ new file mode 100644
 +
 +    logging.basicConfig(
 +        filename=log_file,
-+        level=logging.INFO,
++        level=logging.DEBUG,  # 将日志级别设置为DEBUG以捕获所有日志
 +        format="%(asctime)s %(levelname)s:%(message)s",
 +    )
 diff --git a/main.py b/main.py
