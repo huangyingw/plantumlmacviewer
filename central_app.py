@@ -1,4 +1,5 @@
 from PyQt5.QtWidgets import (
+    QDesktopWidget,
     QApplication,
     QMainWindow,
     QScrollArea,
@@ -162,8 +163,23 @@ class UMLViewer(QMainWindow):
         # 设置快捷键
         self.setupShortcuts()
 
+        # 将窗口放置在当前显示器上
+        self.move_to_current_screen()
+
         # 窗口最大化
         self.showMaximized()
+
+    def move_to_current_screen(self):
+        main_window = (
+            self.centralApp.windows[0] if self.centralApp.windows else None
+        )
+        if main_window:
+            screen = QApplication.desktop().screenNumber(main_window)
+        else:
+            screen = QApplication.desktop().primaryScreen()
+
+        rect = QApplication.desktop().screenGeometry(screen)
+        self.setGeometry(rect)
 
     def setupShortcuts(self):
         # 使用 QShortcut 设置快捷键
