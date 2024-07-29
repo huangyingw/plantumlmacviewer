@@ -197,31 +197,21 @@ class UMLViewer(QMainWindow):
             self.centralApp.openNewWindow(filePath)
 
     def loadAndDisplayUML(self, filePath):
-        temp_png_path = None
         temp_dir = None
-        error_occurred = False
-
         try:
             self.previousApp = self.getActiveAppName()
             self.setFocusPolicy(Qt.NoFocus)
             # 在加载 UML 之前，设置窗口标题为文件名
             self.setWindowTitle(os.path.basename(filePath))
-            plantuml_base_path = "/usr/local/Cellar/plantuml/"
-            latest_version_path = max(
-                glob.glob(os.path.join(plantuml_base_path, "*/")),
-                key=os.path.getmtime,
-            )
-            plantuml_jar_path = os.path.join(
-                latest_version_path, "libexec/plantuml.jar"
-            )
+            plantuml_jar_path = self.get_plantuml_jar_path()
 
-            # 使用临时文件来保存生成的 PNG
-            temp_dir = tempfile.mkdtemp()  # 创建临时目录
-            temp_png_path = os.path.join(
-                temp_dir, os.path.basename(filePath).replace(".puml", ".png")
+            temp_dir = tempfile.mkdtemp()
+            base_name = os.path.basename(filePath)
+            png_name = (
+                base_name.replace(".puml", "").replace(" ", "_") + ".png"
             )
+            temp_png_path = os.path.join(temp_dir, png_name)
 
-            # 更新 PlantUML 命令以使用临时目录
             command = [
                 "java",
                 "-jar",
@@ -232,42 +222,58 @@ class UMLViewer(QMainWindow):
                 filePath,
             ]
             logging.info(f"Running command: {' '.join(command)}")
-            result = subprocess.run(command, check=True, capture_output=True)
+            result = subprocess.run(command, capture_output=True, text=True)
+            logging.info(f"PlantUML return code: {result.returncode}")
             logging.info(f"PlantUML Output: {result.stdout}")
+            logging.info(f"PlantUML Error Output: {result.stderr}")
+            logging.info(f"Temp directory contents: {os.listdir(temp_dir)}")
 
-            # 统一的图像加载和显示逻辑
-            self.displayImage(temp_png_path)
+            # 查找生成的PNG文件
+            generated_files = [
+                f for f in os.listdir(temp_dir) if f.endswith(".png")
+            ]
+            if not generated_files:
+                raise FileNotFoundError(f"No PNG file generated in {temp_dir}")
+
+            actual_png_path = os.path.join(temp_dir, generated_files[0])
+            logging.info(f"Found generated PNG file: {actual_png_path}")
+
+            if os.path.getsize(actual_png_path) == 0:
+                raise ValueError(
+                    f"Generated PNG file is empty: {actual_png_path}"
+                )
+
+            self.displayImage(actual_png_path)
 
         except subprocess.CalledProcessError as e:
             logging.exception(f"Error during subprocess execution: {e}")
-            self.imageLabel.setText("Error generating UML diagram.")
-            error_occurred = True
-            # 即使出现异常，也尝试执行 displayImage
-            self.displayImage(temp_png_path)
-
+            self.imageLabel.setText(f"Error generating UML diagram: {e}")
+        except FileNotFoundError as e:
+            logging.exception(f"File not found: {e}")
+            self.imageLabel.setText(f"Error: {e}")
+        except ValueError as e:
+            logging.exception(f"Invalid file: {e}")
+            self.imageLabel.setText(f"Error: {e}")
+        except Exception as e:
+            logging.exception(f"Unexpected error: {e}")
+            self.imageLabel.setText(f"An unexpected error occurred: {e}")
         finally:
-            # 删除临时 PNG 文件和目录
-            if temp_png_path and os.path.exists(temp_png_path):
-                try:
-                    os.unlink(temp_png_path)
-                    logging.info(
-                        f"Temp PNG file {temp_png_path} removed successfully."
-                    )
-                except Exception as e:
-                    logging.error(f"Error removing temp file: {e}")
-
-            # 删除临时目录
+            self.focusSignal.emit()
             if temp_dir and os.path.exists(temp_dir):
                 try:
-                    os.rmdir(temp_dir)
-                    logging.info(f"Temp dir {temp_dir} removed successfully.")
+                    import shutil
+
+                    shutil.rmtree(temp_dir)
                 except Exception as e:
                     logging.error(f"Error removing temp dir: {e}")
 
-            # 发射信号
-            self.focusSignal.emit()
-            if error_occurred:
-                return
+    def get_plantuml_jar_path(self):
+        plantuml_base_path = "/usr/local/Cellar/plantuml/"
+        latest_version_path = max(
+            glob.glob(os.path.join(plantuml_base_path, "*/")),
+            key=os.path.getmtime,
+        )
+        return os.path.join(latest_version_path, "libexec/plantuml.jar")
 
     def displayImage(self, imagePath):
         logging.info(f"Loading PNG file: {imagePath}")
@@ -278,8 +284,9 @@ class UMLViewer(QMainWindow):
             self.imageLabel.setPixmap(pixmap)
             logging.info("Image updated successfully.")
         else:
-            self.imageLabel.setText(f"Failed to load the generated image.")
-            logging.info("Failed to load the generated image.")
+            error_msg = f"Failed to load the generated image: {imagePath}"
+            logging.error(error_msg)
+            self.imageLabel.setText(error_msg)
 
     def postFocusProcessing(self):
         self.raise_()
