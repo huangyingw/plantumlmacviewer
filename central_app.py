@@ -8,6 +8,13 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QSizePolicy,
 )
+
+from PyQt5.QtCore import (
+    Qt,
+    pyqtSignal,
+    QEvent,
+    QCoreApplication,
+)
 from PyQt5.QtGui import QPixmap, QImage, QKeySequence
 from PyQt5.QtCore import Qt, pyqtSignal, QEvent, QCoreApplication
 from watchdog.observers import Observer
@@ -182,9 +189,15 @@ class UMLViewer(QMainWindow):
         self.setGeometry(rect)
 
     def setupShortcuts(self):
-        # 使用 QShortcut 设置快捷键
+        # 打开文件快捷键
         self.openFileShortcut = QShortcut(QKeySequence("Ctrl+O"), self)
         self.openFileShortcut.activated.connect(self.openFile)
+        logging.debug("Open file shortcut (Ctrl+O) set up")
+
+        # 关闭窗口快捷键
+        self.closeWindowShortcut = QShortcut(QKeySequence("Ctrl+W"), self)
+        self.closeWindowShortcut.activated.connect(self.close)
+        logging.debug("Close window shortcut (Ctrl+W) set up")
 
     def openFile(self):
         # 修改 openFile 方法以支持在新窗口中打开文件
@@ -310,13 +323,16 @@ class UMLViewer(QMainWindow):
                 )
                 break
 
-    def keyPressEvent(self, event):
-        # 处理快捷键事件
-        if event.key() == Qt.Key_Plus:
-            # 缩放代码
-            pass
-        elif event.key() == Qt.Key_Minus:
-            # 缩放代码
-            pass
-        else:
-            super().keyPressEvent(event)
+    def closeEvent(self, event):
+        logging.debug("Close event triggered")
+        # Remove this window from the centralApp's windows list
+        if self in self.centralApp.windows:
+            self.centralApp.windows.remove(self)
+
+        # Remove this window from the fileWindowMap
+        for file_path, window in list(self.centralApp.fileWindowMap.items()):
+            if window == self:
+                del self.centralApp.fileWindowMap[file_path]
+
+        # Accept the close event
+        event.accept()
