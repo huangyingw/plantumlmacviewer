@@ -14,4 +14,5 @@ def setup_logging():
         filename=log_file,
         level=logging.DEBUG,  # 将日志级别设置为DEBUG以捕获所有日志
         format="%(asctime)s %(levelname)s:%(message)s",
+        filemode="a",  # 追加模式
     )
