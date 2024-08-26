@@ -3,7 +3,6 @@ import sys
 import venv
 import time
 import subprocess
-from central_app import CentralApp
 from logger import setup_logging
 import logging
 
