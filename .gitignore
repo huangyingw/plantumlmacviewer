@@ -1,2 +1,4 @@
 go.sum
 plantumlviewerserver.log
+plantuml_viewer_env/
+send_paths.log
