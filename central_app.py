@@ -27,131 +27,156 @@ from events import OpenWindowEvent
 from file_change_handler import FileChangeHandler
 from logger import setup_logging
 import logging
-import AppKit
 import subprocess
+from PyQt5.QtWidgets import QApplication, QMainWindow
+from PyQt5.QtCore import QTimer
 import os
 import glob
+
+# 使用 pyobjc 导入 AppKit
+from AppKit import NSWorkspace
+
+setup_logging()
+logging.info("central_app.py 日志系统初始化完成")
 
 
 class CentralApp(QApplication):
     def __init__(self, argv):
+        logging.debug("开始初始化 CentralApp")
         super().__init__(argv)
-        logging.debug("CentralApp initialized")
-        self.windows = []  # 存储所有打开的窗口
-        self.fileWindowMap = {}  # 文件路径到窗口的映射
-        self.observers = {}  # 目录到 Observer 的映射
+        self.windows = []
+        self.fileWindowMap = {}
+        self.observers = {}
+        self.socketThread = None
+        logging.debug("CentralApp 初始化完成")
 
-        # 启动套接字监听线程
-        socketThread = threading.Thread(target=self.listenToSocket)
-        socketThread.daemon = True
-        socketThread.start()
+    def start(self):
+        logging.debug("准备启动套接字监听线程")
+        self.socketThread = threading.Thread(target=self.listenToSocket)
+        self.socketThread.daemon = True
+        self.socketThread.start()
+        logging.debug("套接字监听线程启动完成")
 
     def listenToSocket(self):
-        host = "localhost"  # 或者其他适合您需求的主机地址
-        port = 12345  # 选择一个适合的端口号
+        host = "localhost"
+        port = 12345
 
-        # 创建套接字
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind((host, port))
             s.listen()
-
             logging.info(f"Listening on {host}:{port}")
 
             while True:
-                # 等待连接
-                conn, addr = s.accept()
-                with conn:
-                    logging.info(f"Connected by {addr}")
-                    data = b""
-                    while True:
-                        packet = conn.recv(4096)
-                        if not packet:
-                            break
-                        data += packet
-
-                    file_paths = (
-                        data.decode().strip().split("\n")
-                    )  # 分割接收到的文件路径
-                    logging.info(f"Received file paths: {file_paths}")
-                    QCoreApplication.postEvent(
-                        self, OpenWindowEvent(file_paths)
-                    )
+                try:
+                    conn, addr = s.accept()
+                    with conn:
+                        logging.info(f"Connected by {addr}")
+                        data = conn.recv(4096).decode().strip()
+                        file_paths = data.split("\n")
+                        logging.info(f"Received file paths: {file_paths}")
+                        for file_path in file_paths:
+                            QCoreApplication.postEvent(
+                                self, OpenWindowEvent([file_path])
+                            )
+                except Exception as e:
+                    logging.error(f"Socket error: {str(e)}")
 
     def customEvent(self, event):
         logging.debug(f"customEvent triggered with event type: {event.type()}")
         if event.type() == OpenWindowEvent.EVENT_TYPE:
-            for filePath in event.filePaths:  # 循环遍历文件路径列表
-                if filePath in self.fileWindowMap:
-                    window = self.fileWindowMap[filePath]
-                    window.raise_()
-                    window.activateWindow()
-                else:
+            for filePath in event.filePaths:
+                try:
                     self.openNewWindow(filePath)
+                except Exception as e:
+                    logging.error(
+                        f"Error opening new window for {filePath}: {str(e)}"
+                    )
 
     def openNewWindow(self, filePath=None):
         logging.debug(f"openNewWindow called with filePath: {filePath}")
-        # 确保路径是规范化的
-        if filePath and not filePath.startswith("fugitive:///"):
-            filePath = os.path.abspath(filePath)
+        try:
+            if filePath and not filePath.startswith("fugitive:///"):
+                filePath = os.path.abspath(filePath)
 
-        # 如果文件已经打开，激活对应的窗口
-        if filePath in self.fileWindowMap:
-            window = self.fileWindowMap[filePath]
-            logging.info(f"Activating existing window for {filePath}")
-            window.raise_()
-            window.activateWindow()
-            QApplication.processEvents()  # 处理事件队列
-            return
+            if filePath in self.fileWindowMap:
+                window = self.fileWindowMap[filePath]
+                logging.info(f"Activating existing window for {filePath}")
+                window.raise_()
+                window.activateWindow()
+                QCoreApplication.processEvents()
+                return
 
-        # 创建新窗口并将其添加到窗口列表和文件映射中
-        new_window = UMLViewer(self)
-        self.windows.append(new_window)
-        if filePath:
-            self.fileWindowMap[filePath] = new_window
-            new_window.loadAndDisplayUML(filePath)
-            self.startFileWatcher(filePath, new_window)
-        new_window.show()
+            new_window = UMLViewer(self)
+            self.windows.append(new_window)
+            if filePath:
+                self.fileWindowMap[filePath] = new_window
+                new_window.loadAndDisplayUML(filePath)
+                self.startFileWatcher(filePath, new_window)
+            new_window.show()
+            new_window.raise_()
+            new_window.activateWindow()
 
-        # 新增代码：激活并将新窗口置于前台
-        new_window.raise_()
-        new_window.activateWindow()
+            logging.info(f"New window created and activated for {filePath}")
+        except Exception as e:
+            logging.error(f"Error in openNewWindow: {str(e)}")
 
     def startFileWatcher(self, filePath, viewer):
         logging.debug(f"startFileWatcher called with filePath: {filePath}")
         if not filePath.startswith("fugitive:///"):
-            # 确保路径是规范化的
             filePath = os.path.abspath(filePath)
-        # 获取目录路径
         directory = os.path.dirname(filePath)
 
-        # 检查此目录是否已经有一个监控器，如果有，只需添加事件处理器，而不是创建新的监控器
         if directory in self.observers:
-            # 为已存在的监控器添加事件处理器
             event_handler = FileChangeHandler(viewer, filePath)
             self.observers[directory].schedule(
                 event_handler, directory, recursive=False
             )
         else:
-            # 创建新的 Observer
             observer = Observer()
             self.observers[directory] = observer
             event_handler = FileChangeHandler(viewer, filePath)
             observer.schedule(event_handler, directory, recursive=False)
             observer.start()
 
+    def exec_(self):
+        logging.info("Entering main event loop")
+        try:
+            return super().exec_()
+        except Exception as e:
+            logging.critical(f"Unhandled exception in main loop: {str(e)}")
+            return 1
+
 
 class UMLViewer(QMainWindow):
     focusSignal = pyqtSignal()
 
+    def setFocusToApp(self, appName):
+        try:
+            ws = NSWorkspace.sharedWorkspace()
+            running_apps = ws.runningApplications()
+            for app in running_apps:
+                if app.localizedName() == appName:
+                    app.activateWithOptions_(
+                        NSApplicationActivateIgnoringOtherApps
+                    )
+                    break
+        except Exception as e:
+            logging.error(f"Error setting focus to app {appName}: {str(e)}")
+
     def __init__(self, centralApp):
+        logging.debug("开始初始化 UMLViewer")
         super().__init__()
-        logging.debug("UMLViewer initialized")
         self.centralApp = centralApp
+        self.previousApp = None
         self.initUI()
         self.focusSignal.connect(self.postFocusProcessing)
+        logging.debug("UMLViewer 初始化完成")
 
     def initUI(self):
+        logging.debug("开始初始化 UI")
         self.setWindowTitle("PlantUML Viewer")
+        self.setGeometry(100, 100, 800, 600)
+        logging.debug("UI 初始化完成")
 
         # 容纳UML图像的滚动区域
         self.scrollArea = QScrollArea(self)
@@ -302,26 +327,20 @@ class UMLViewer(QMainWindow):
             self.imageLabel.setText(error_msg)
 
     def postFocusProcessing(self):
-        self.raise_()
-        self.activateWindow()
-        QApplication.processEvents()
-        self.setFocusToApp(self.previousApp)
+        try:
+            self.raise_()
+            self.activateWindow()
+            QApplication.processEvents()
+            if self.previousApp:
+                self.setFocusToApp(self.previousApp)
+            self.previousApp = None
+        except Exception as e:
+            logging.error(f"Error in postFocusProcessing: {str(e)}")
 
     def getActiveAppName(self):
-        # 获取当前活动的应用程序的名称
-        ws = AppKit.NSWorkspace.sharedWorkspace()
+        ws = NSWorkspace.sharedWorkspace()
         frontmostApp = ws.frontmostApplication()
         return frontmostApp.localizedName()
-
-    def setFocusToApp(self, appName):
-        # 将焦点设置到指定的应用程序
-        ws = AppKit.NSWorkspace.sharedWorkspace()
-        for app in ws.runningApplications():
-            if app.localizedName() == appName:
-                app.activateWithOptions_(
-                    AppKit.NSApplicationActivateIgnoringOtherApps
-                )
-                break
 
     def closeEvent(self, event):
         logging.debug("Close event triggered")
@@ -336,3 +355,22 @@ class UMLViewer(QMainWindow):
 
         # Accept the close event
         event.accept()
+
+
+def main():
+    logging.info("central_app.py 开始执行")
+    try:
+        app = CentralApp(sys.argv)
+        app.start()  # 启动套接字监听线程
+        viewer = UMLViewer(app)
+        viewer.show()
+        return app.exec_()
+    except Exception as e:
+        logging.exception(f"发生未处理的异常: {str(e)}")
+        return 1
+    finally:
+        logging.info("central_app.py 执行结束")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
