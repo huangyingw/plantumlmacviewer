@@ -57,6 +57,18 @@ class CentralApp(QApplication):
         self.socketThread.start()
         logging.debug("套接字监听线程启动完成")
 
+    def createNewWindow(self, filePath):
+        logging.debug(f"创建新窗口，文件路径：{filePath}")
+        new_window = UMLViewer(self)
+        self.windows.append(new_window)
+        new_window.show()
+        new_window.raise_()
+        new_window.activateWindow()
+        new_window.loadAndDisplayUML(filePath)
+        self.fileWindowMap[filePath] = new_window
+        self.startFileWatcher(filePath, new_window)
+        return new_window
+
     def listenToSocket(self):
         host = "localhost"
         port = 12345
@@ -86,14 +98,14 @@ class CentralApp(QApplication):
         if event.type() == OpenWindowEvent.EVENT_TYPE:
             for filePath in event.filePaths:
                 try:
-                    self.openNewWindow(filePath)
+                    self.openOrActivateWindow(filePath)
                 except Exception as e:
                     logging.error(
-                        f"Error opening new window for {filePath}: {str(e)}"
+                        f"Error opening or activating window for {filePath}: {str(e)}"
                     )
 
-    def openNewWindow(self, filePath=None):
-        logging.debug(f"openNewWindow called with filePath: {filePath}")
+    def openOrActivateWindow(self, filePath):
+        logging.debug(f"openOrActivateWindow called with filePath: {filePath}")
         try:
             if filePath and not filePath.startswith("fugitive:///"):
                 filePath = os.path.abspath(filePath)
@@ -104,21 +116,11 @@ class CentralApp(QApplication):
                 window.raise_()
                 window.activateWindow()
                 QCoreApplication.processEvents()
-                return
+            else:
+                self.createNewWindow(filePath)
 
-            new_window = UMLViewer(self)
-            self.windows.append(new_window)
-            if filePath:
-                self.fileWindowMap[filePath] = new_window
-                new_window.loadAndDisplayUML(filePath)
-                self.startFileWatcher(filePath, new_window)
-            new_window.show()
-            new_window.raise_()
-            new_window.activateWindow()
-
-            logging.info(f"New window created and activated for {filePath}")
         except Exception as e:
-            logging.error(f"Error in openNewWindow: {str(e)}")
+            logging.error(f"Error in openOrActivateWindow: {str(e)}")
 
     def startFileWatcher(self, filePath, viewer):
         logging.debug(f"startFileWatcher called with filePath: {filePath}")
@@ -202,14 +204,7 @@ class UMLViewer(QMainWindow):
         self.showMaximized()
 
     def move_to_current_screen(self):
-        main_window = (
-            self.centralApp.windows[0] if self.centralApp.windows else None
-        )
-        if main_window:
-            screen = QApplication.desktop().screenNumber(main_window)
-        else:
-            screen = QApplication.desktop().primaryScreen()
-
+        screen = QApplication.desktop().primaryScreen()
         rect = QApplication.desktop().screenGeometry(screen)
         self.setGeometry(rect)
 
@@ -361,9 +356,7 @@ def main():
     logging.info("central_app.py 开始执行")
     try:
         app = CentralApp(sys.argv)
-        app.start()  # 启动套接字监听线程
-        viewer = UMLViewer(app)
-        viewer.show()
+        app.start()  # 只启动套接字监听线程，不创建初始窗口
         return app.exec_()
     except Exception as e:
         logging.exception(f"发生未处理的异常: {str(e)}")
