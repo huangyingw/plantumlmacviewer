@@ -219,6 +219,11 @@ class UMLViewer(QMainWindow):
         self.closeWindowShortcut.activated.connect(self.close)
         logging.debug("Close window shortcut (Ctrl+W) set up")
 
+        # 添加复制窗口截图到剪贴板的快捷键（Command+C）
+        self.copyShortcut = QShortcut(QKeySequence("Ctrl+C"), self)
+        self.copyShortcut.activated.connect(self.copyWindowToClipboard)
+        logging.debug("Copy window shortcut (Command+C) set up")
+
     def openFile(self):
         # 修改 openFile 方法以支持在新窗口中打开文件
         filePath, _ = QFileDialog.getOpenFileName(
@@ -336,6 +341,23 @@ class UMLViewer(QMainWindow):
         ws = NSWorkspace.sharedWorkspace()
         frontmostApp = ws.frontmostApplication()
         return frontmostApp.localizedName()
+
+    def copyWindowToClipboard(self):
+        try:
+            logging.info("开始复制窗口截图到剪贴板")
+            # 截取当前窗口的截图
+            pixmap = self.grab()
+            if pixmap.isNull():
+                logging.error("截图失败，pixmap 为空")
+                return
+
+            # 获取系统剪贴板
+            clipboard = QApplication.clipboard()
+            # 将截图复制到剪贴板
+            clipboard.setPixmap(pixmap, mode=clipboard.Clipboard)
+            logging.info("窗口截图已复制到剪贴板")
+        except Exception as e:
+            logging.exception(f"复制窗口截图到剪贴板时发生异常: {e}")
 
     def closeEvent(self, event):
         logging.debug("Close event triggered")
