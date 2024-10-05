@@ -2,7 +2,7 @@ diff --git a/central_app.py b/central_app.py
 new file mode 100644
 --- /dev/null
 +++ ./central_app.py
-@@ -0,0 +1,369 @@
+@@ -0,0 +1,391 @@
 +from PyQt5.QtWidgets import (
 +    QDesktopWidget,
 +    QApplication,
@@ -39,7 +39,7 @@ new file mode 100644
 +import glob
 +
 +# 使用 pyobjc 导入 AppKit
-+from AppKit import NSWorkspace
++from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps
 +
 +setup_logging()
 +logging.info("central_app.py 日志系统初始化完成")
@@ -224,6 +224,11 @@ new file mode 100644
 +        self.closeWindowShortcut.activated.connect(self.close)
 +        logging.debug("Close window shortcut (Ctrl+W) set up")
 +
++        # 添加复制窗口截图到剪贴板的快捷键（Command+C）
++        self.copyShortcut = QShortcut(QKeySequence("Ctrl+C"), self)
++        self.copyShortcut.activated.connect(self.copyWindowToClipboard)
++        logging.debug("Copy window shortcut (Command+C) set up")
++
 +    def openFile(self):
 +        # 修改 openFile 方法以支持在新窗口中打开文件
 +        filePath, _ = QFileDialog.getOpenFileName(
@@ -341,6 +346,23 @@ new file mode 100644
 +        ws = NSWorkspace.sharedWorkspace()
 +        frontmostApp = ws.frontmostApplication()
 +        return frontmostApp.localizedName()
++
++    def copyWindowToClipboard(self):
++        try:
++            logging.info("开始复制窗口截图到剪贴板")
++            # 截取当前窗口的截图
++            pixmap = self.grab()
++            if pixmap.isNull():
++                logging.error("截图失败，pixmap 为空")
++                return
++
++            # 获取系统剪贴板
++            clipboard = QApplication.clipboard()
++            # 将截图复制到剪贴板
++            clipboard.setPixmap(pixmap, mode=clipboard.Clipboard)
++            logging.info("窗口截图已复制到剪贴板")
++        except Exception as e:
++            logging.exception(f"复制窗口截图到剪贴板时发生异常: {e}")
 +
 +    def closeEvent(self, event):
 +        logging.debug("Close event triggered")
@@ -529,14 +551,15 @@ diff --git a/readme b/readme
 new file mode 100644
 --- /dev/null
 +++ ./readme
-@@ -0,0 +1,8 @@
+@@ -0,0 +1,9 @@
 +上面是我的代码.
 +他的主要功能是呈现一个或多个puml文件, 每个窗口呈现一个puml文件, 并在文件有修改时重新加载窗口.
-+我现在想再加一个功能, 就是当我按下command c组合键时, 把当前puml窗口做一个截图, 然后保存到系统粘贴板.
-+这个代码只在macos上运行, 而且command c组合键, 只在当前puml窗口上起作用. 
-+也就是说, 这个程序不激活时, 或者说当前激活的是其他程序时, command c组合键, 还是他之前的行为. 不要修改.
++我现在想再加一个功能,
++我是用git来对puml文件进行版本控制, 我想比对修改前后所生成的图像. 
++我想做的功能是, 通过vim script来定义一个命令, 他会先发送一个命令给上面的python代码, 关闭所有其他窗口.
++然后再把当前文件用类似的命令:  git show HEAD:"$1" > "$1".bak 来生成一个临时文件, 
++然后把当前文件, 和临时文件, 两个发给上面的python代码, 让他来做呈现.
 +生成需要修改的文件
-+我想用一个单独的分支来实现这个功能, 帮我给这个分支起一个好的名字.
 +回答用中文.
 diff --git a/requirements.txt b/requirements.txt
 new file mode 100644
