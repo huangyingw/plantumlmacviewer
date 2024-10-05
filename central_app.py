@@ -34,7 +34,7 @@ import os
 import glob
 
 # 使用 pyobjc 导入 AppKit
-from AppKit import NSWorkspace
+from AppKit import NSWorkspace, NSApplicationActivateIgnoringOtherApps
 
 setup_logging()
 logging.info("central_app.py 日志系统初始化完成")
